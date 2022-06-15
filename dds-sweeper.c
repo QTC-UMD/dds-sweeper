@@ -89,7 +89,7 @@ void set_freq(uint channel, uint32_t freq) {
     };
 
     // because of how get_ftw works, it is easier to send the LSB first
-    uint8_t mesg = enable_nibbles[channel] << 4 | 0b0011;
+    uint8_t mesg = enable_nibbles[channel] << 4 | 0b0010;
     send(CSR, CSR_LEN, &mesg);
     ad9959_update();
 
