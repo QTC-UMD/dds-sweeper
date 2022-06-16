@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "hardware/spi.h"
 #include "pico/stdlib.h"
@@ -17,6 +18,10 @@
 #define PIN_SCK 18
 #define PIN_RESET 20
 #define PIN_UPDATE 21
+#define P0 10
+#define P1 11
+#define P2 12
+#define P3 13
 
 // SPI config
 #define SPI_PORT spi0
@@ -24,6 +29,7 @@
 #define READ_BIT 0x80
 #define REF_CLK (20 * 1000 * 1000)
 #define MULT 10
+#define CSR_NIBBLE 0x2
 
 // Serial Register Addresses
 #define CSR 0x00
@@ -39,10 +45,41 @@
 #define CFR_LEN 3
 #define CFTW0_LEN 4
 
-// helper functions
-static void ad9959_reset();
-static void ad9959_update();
+uint8_t zeros[10];
 
+typedef struct _Channel {
+    uint8_t cfr[3];
+    uint8_t cftw0[4];
+    uint8_t cpow0[2];
+    uint8_t acr[2];
+    uint8_t lsrr[2];
+    uint8_t rdw[4];
+    uint8_t fdw[4];
+    uint8_t cw1[4];
+    uint8_t cw2[4];
+    uint8_t cw3[4];
+    uint8_t cw4[4];
+    uint8_t cw5[4];
+    uint8_t cw6[4];
+    uint8_t cw7[4];
+    uint8_t cw8[4];
+    uint8_t cw9[4];
+    uint8_t cw10[4];
+    uint8_t cw11[4];
+    uint8_t cw12[4];
+    uint8_t cw13[4];
+    uint8_t cw14[4];
+    uint8_t cw15[4];
+} Channel;
+
+typedef struct _ad9959 {
+    uint8_t csr[1];
+    uint8_t fr1[3];
+    uint8_t fr2[2];
+    Channel channels[4];
+} ad9959;
+
+// helper functions
 static void ad9959_reset() {
     sleep_us(1);
     gpio_put(PIN_RESET, 1);
@@ -59,15 +96,17 @@ static void ad9959_update() {
     sleep_us(1);
 }
 
-typedef union ftw {
+typedef union word_t {
     uint8_t bytes[4];
     uint32_t word;
-} ftw;
+} word_t;
 
-static void get_ftw(uint32_t f, ftw* word) {
-    uint64_t fout = 0 | f;
+static void get_freq_wrd(uint32_t f, word_t* word) {
+    uint64_t fout = f;
     uint64_t fsys = REF_CLK * MULT;
-    word->word = (uint32_t)round(fout * 4294967296.0 / fsys);
+    uint32_t val = (uint32_t)round(fout * 4294967296.0 / fsys);
+    word->word = (val << 24) | ((val & 0xff00) << 8) | ((val & 0xff0000) >> 8) |
+                 (val >> 24);
 }
 
 void send(uint8_t reg, uint len, uint8_t* data) {
@@ -75,27 +114,72 @@ void send(uint8_t reg, uint len, uint8_t* data) {
     spi_write_blocking(SPI_PORT, data, len);
 }
 
+void read(uint8_t reg, uint len, uint8_t* buf) {
+    reg |= READ_BIT;
+    spi_write_blocking(SPI_PORT, &reg, 1);
+    spi_read_blocking(SPI_PORT, 0, buf, len);
+}
+
+void select_channel(uint channel) {
+    // set just channel we want
+    uint8_t enable_nibbles[] = {0b0001, 0b0010, 0b0100, 0b1000};
+
+    uint8_t mesg = enable_nibbles[channel] << 4 | CSR_NIBBLE;
+    send(CSR, CSR_LEN, &mesg);
+}
+
 void set_freq(uint channel, uint32_t freq) {
     // turn the Hz into a FTW
-    ftw channel_freq;
-    get_ftw(freq, &channel_freq);
+    word_t ftw;
+    get_freq_wrd(freq, &ftw);
 
-    // set just chanel we want
-    uint8_t enable_nibbles[] = {
-        0b0001, 
-        0b0010,
-        0b0100,
-        0b1000        
-    };
-
-    // because of how get_ftw works, it is easier to send the LSB first
-    uint8_t mesg = enable_nibbles[channel] << 4 | 0b0010;
-    send(CSR, CSR_LEN, &mesg);
-    ad9959_update();
+    select_channel(channel);
 
     // send the freq
-    send(CFTW0, CFTW0_LEN, channel_freq.bytes);
+    send(CFTW0, CFTW0_LEN, ftw.bytes);
+}
 
+void get_delta_word(uint32_t time, uint32_t start, uint32_t end, word_t* word) {
+    double min_rate = 4.0 / (REF_CLK * MULT);
+    double steps = time / min_rate;
+    double delta = (end - start) / steps;
+    uint64_t fsys = REF_CLK * MULT;
+    uint32_t val = (uint32_t)round(delta * 4294967296.0 / fsys);
+    word->word = (val << 24) | ((val & 0xff00) << 8) | ((val & 0xff0000) >> 8) |
+                 (val >> 24);
+}
+
+void sweep_setup(uint channel, uint32_t start, uint32_t end, uint32_t time) {
+    // prep all values
+    word_t s0;
+    get_freq_wrd(start, &s0);
+    word_t e0;
+    get_freq_wrd(end, &e0);
+
+    word_t rdw;
+    get_delta_word(time, start, end, &rdw);
+
+    // assume most fine gradient
+    uint8_t srr[2] = {0x01, 0x01};
+
+    // the CFR register always gets the same values for a sweep
+    uint8_t sweep[3] = {0x80, 0x43, 0x10};
+
+
+    select_channel(channel);
+
+    send(0x04, 4, s0.bytes);
+    send(0x0a, 4, e0.bytes);
+    send(CFR, CFR_LEN, sweep);
+    send(0x07, 2, srr);
+    send(0x08, 4, rdw.bytes);
+    send(0x09, 4, zeros);
+}
+
+void init_pin(uint pin) {
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_OUT);
+    gpio_put(pin, 0);
 }
 
 void setup() {
@@ -115,13 +199,12 @@ void setup() {
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
 
     // init reset and update pins
-    gpio_init(PIN_RESET);
-    gpio_set_dir(PIN_RESET, GPIO_OUT);
-    gpio_put(PIN_RESET, 0);
-
-    gpio_init(PIN_UPDATE);
-    gpio_set_dir(PIN_UPDATE, GPIO_OUT);
-    gpio_put(PIN_UPDATE, 0);
+    init_pin(PIN_RESET);
+    init_pin(PIN_UPDATE);
+    init_pin(P0);
+    init_pin(P1);
+    init_pin(P2);
+    init_pin(P3);
 
     // put chip in a known state
     ad9959_reset();
@@ -133,7 +216,7 @@ void setup() {
 }
 
 int main() {
-    
+    memset(zeros, 0, 10);
     setup();
 
     // set PLL multiplier
@@ -141,23 +224,41 @@ int main() {
     spi_write_blocking(SPI_PORT, fr1, FR1_LEN + 1);
     ad9959_update();
 
-    
-
-    // Output 20Mhz signal on all chanels
-    uint8_t command[] = {0x04, 0x19, 0x99, 0x99, 0x9A};
-    spi_write_blocking(SPI_PORT, command, 5);
-    ad9959_update();
+    // Output 20Mhz signal on all channels
+    // uint8_t command[] = {0x04, 0x19, 0x99, 0x99, 0x9A};
+    // spi_write_blocking(SPI_PORT, command, 5);
+    // ad9959_update();
 
     // try a read
-    uint8_t x[] ={0x80};
-    spi_write_blocking(SPI_PORT, x, 1);
-    uint8_t resp[1];
-    spi_read_blocking(SPI_PORT, 0, resp, 1);
+    // uint8_t x[] ={0x80};
+    // spi_write_blocking(SPI_PORT, x, 1);
+    // uint8_t resp[1];
+    // spi_read_blocking(SPI_PORT, 0, resp, 1);
 
-    printf("Resp: %x\n", *resp);
+    // printf("Resp: %x\n", *resp);
+
+    // uint8_t resp[8];
+    // uint8_t resp2[8];
+    // uint8_t select[] = {0x12};
+    // send(CSR, 1, select);
+    // read(CSR, CSR_LEN, resp);
+    // printf("Resp: %x\n", *resp);
+    // read(CFR, CFR_LEN, resp2);
+    // printf("Resp: %x %x %x\n", resp2[0], resp2[1], resp2[2]);
 
     // us my function
-    set_freq(0, 15000000);
+    set_freq(0, 10000000);
+    ad9959_update();
+
+
+
+    sweep_setup(0, 10000000, 30000000, 5);
+    ad9959_update();
+    gpio_put(P0, 1);
+    
+    sleep_ms(6000);
+    // gpio_put(P0, 0);
+    sweep_setup(0, 30000000, 45000000, 3);
     ad9959_update();
 
     printf("\n\n==============================\n");
