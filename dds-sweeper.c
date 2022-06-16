@@ -1,9 +1,3 @@
-/**
- * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- */
-
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -262,5 +256,7 @@ int main() {
     ad9959_update();
 
     printf("\n\n==============================\n");
+    char buf[100];
+    scanf("%s", buf);
     return 0;
 }
