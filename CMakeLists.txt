@@ -18,6 +18,7 @@ add_executable(dds-sweeper
 target_link_libraries(dds-sweeper 
         pico_stdlib
         hardware_spi
+        hardware_clocks
         )
 
 # enable UART output and disable Serial USB
