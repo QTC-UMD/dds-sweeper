@@ -106,11 +106,12 @@ void set_freq(uint channel, uint32_t freq) {
 }
 
 void get_delta_word(uint32_t time, uint32_t start, uint32_t end, word_t* word) {
-    double min_rate = 4.0 / (REF_CLK * MULT);
+    double min_rate = 0xff * 4.0 / (REF_CLK * MULT);
     double steps = time / min_rate;
     double delta = (end - start) / steps;
     uint64_t fsys = REF_CLK * MULT;
     uint32_t val = (uint32_t)round(delta * 4294967296.0 / fsys);
+    val = val == 0 ? 1 : val;
     word->word = (val << 24) | ((val & 0xff00) << 8) | ((val & 0xff0000) >> 8) |
                  (val >> 24);
 }
@@ -126,10 +127,10 @@ void sweep_setup(uint channel, uint32_t start, uint32_t end, uint32_t time) {
     get_delta_word(time, start, end, &rdw);
 
     // assume most fine gradient
-    uint8_t srr[2] = {0x01, 0x01};
+    uint8_t srr[2] = {0xff, 0xff};
 
     // the CFR register always gets the same values for a sweep
-    uint8_t sweep[3] = {0x80, 0x43, 0x10};
+    uint8_t sweep[3] = {0x80, 0x43, 0x04};
 
     select_channel(channel);
 
@@ -138,7 +139,7 @@ void sweep_setup(uint channel, uint32_t start, uint32_t end, uint32_t time) {
     send(CFR, CFR_LEN, sweep);
     send(0x07, 2, srr);
     send(0x08, 4, rdw.bytes);
-    send(0x09, 4, zeros);
+    send(0x09, 4, rdw.bytes);
 }
 
 void init_pin(uint pin) {
@@ -189,6 +190,7 @@ int main() {
 
     memset(zeros, 0, 10);
     setup();
+    printf("\n\nHowdy\n");
 
     // set PLL multiplier
     // int8_t fr1[] = {FR1, 0x28, 0x00, 0x00};
@@ -196,10 +198,26 @@ int main() {
     spi_write_blocking(SPI_PORT, fr1, FR1_LEN + 1);
     ad9959_update();
 
-    set_freq(0, 25 * MHZ);
+    set_freq(0, 5 * MHZ);
     ad9959_update();
 
-    printf("howdy\n\n");
+    gpio_put(P0, 0);
+    sweep_setup(0, 5 * MHZ, 25 * MHZ, 5);
+    ad9959_update();
+    gpio_put(P0, 1);
+
+    sleep_ms(5500);
+    gpio_put(P0, 0);
+
+    sweep_setup(0, 5 * MHZ, 40 * MHZ, 3);
+    sleep_ms(5500);
+    ad9959_update();
+    gpio_put(P0, 1);
+
+    sweep_setup(0, 15 * MHZ, 40 * MHZ, 2);
+    sleep_ms(3500);
+    ad9959_update();
+    gpio_put(P0, 0);
 
     return 0;
 }
