@@ -11,22 +11,22 @@
 #include "pico/stdlib.h"
 
 // Pins to use controlling the AD9959
-#define PIN_MISO 16
-#define PIN_MOSI 19
-#define PIN_SCK 18
+#define PIN_MISO 12
+#define PIN_MOSI 15
+#define PIN_SCK 14
 #define PIN_RESET 20
-#define PIN_UPDATE 21
-#define P0 10
-#define P1 11
-#define P2 12
-#define P3 13
+#define PIN_UPDATE 22
+#define P0 16
+#define P1 17
+#define P2 18
+#define P3 19
 
 // SPI config
-#define SPI_PORT spi0
+#define SPI_PORT spi1
 
 #define READ_BIT 0x80
-#define REF_CLK (20 * 1000 * 1000)
-#define MULT 10
+#define REF_CLK (125 * 1000 * 1000)
+#define MULT 4
 #define CSR_NIBBLE 0x2
 
 // Serial Register Addresses
@@ -183,17 +183,23 @@ void setup() {
 int main() {
     // default system clock speed is 125 MHz
     // need to set it before io init or it is bad
+    // stdio_init_all();
     set_sys_clock_khz(125 * MHZ / 1000, false);
-    clocks_init();
     clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
-    // memset(zeros, 0, 10);
-    // setup();
+    memset(zeros, 0, 10);
+    setup();
 
-    // // set PLL multiplier
+    // set PLL multiplier
     // int8_t fr1[] = {FR1, 0x28, 0x00, 0x00};
-    // spi_write_blocking(SPI_PORT, fr1, FR1_LEN + 1);
-    // ad9959_update();
+    int8_t fr1[] = {FR1, 0x90, 0x00, 0x00};
+    spi_write_blocking(SPI_PORT, fr1, FR1_LEN + 1);
+    ad9959_update();
+
+    set_freq(0, 25 * MHZ);
+    ad9959_update();
+
+    printf("howdy\n\n");
 
     return 0;
 }
