@@ -3,26 +3,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "hardware/clocks.h"
+#include "hardware/pll.h"
 #include "hardware/spi.h"
+#include "hardware/structs/clocks.h"
+#include "hardware/structs/pll.h"
 #include "pico/stdlib.h"
 
 // Pins to use controlling the AD9959
-#define PIN_MISO 16
-#define PIN_MOSI 19
-#define PIN_SCK 18
+#define PIN_MISO 12
+#define PIN_MOSI 15
+#define PIN_SCK 14
 #define PIN_RESET 20
-#define PIN_UPDATE 21
-#define P0 10
-#define P1 11
-#define P2 12
-#define P3 13
+#define PIN_UPDATE 22
+#define P0 16
+#define P1 17
+#define P2 18
+#define P3 19
 
 // SPI config
-#define SPI_PORT spi0
+#define SPI_PORT spi1
 
 #define READ_BIT 0x80
-#define REF_CLK (20 * 1000 * 1000)
-#define MULT 10
+#define REF_CLK (125 * 1000 * 1000)
+#define MULT 4
 #define CSR_NIBBLE 0x2
 
 // Serial Register Addresses
@@ -40,38 +44,6 @@
 #define CFTW0_LEN 4
 
 uint8_t zeros[10];
-
-typedef struct _Channel {
-    uint8_t cfr[3];
-    uint8_t cftw0[4];
-    uint8_t cpow0[2];
-    uint8_t acr[2];
-    uint8_t lsrr[2];
-    uint8_t rdw[4];
-    uint8_t fdw[4];
-    uint8_t cw1[4];
-    uint8_t cw2[4];
-    uint8_t cw3[4];
-    uint8_t cw4[4];
-    uint8_t cw5[4];
-    uint8_t cw6[4];
-    uint8_t cw7[4];
-    uint8_t cw8[4];
-    uint8_t cw9[4];
-    uint8_t cw10[4];
-    uint8_t cw11[4];
-    uint8_t cw12[4];
-    uint8_t cw13[4];
-    uint8_t cw14[4];
-    uint8_t cw15[4];
-} Channel;
-
-typedef struct _ad9959 {
-    uint8_t csr[1];
-    uint8_t fr1[3];
-    uint8_t fr2[2];
-    Channel channels[4];
-} ad9959;
 
 // helper functions
 static void ad9959_reset() {
@@ -159,7 +131,6 @@ void sweep_setup(uint channel, uint32_t start, uint32_t end, uint32_t time) {
     // the CFR register always gets the same values for a sweep
     uint8_t sweep[3] = {0x80, 0x43, 0x10};
 
-
     select_channel(channel);
 
     send(0x04, 4, s0.bytes);
@@ -210,53 +181,25 @@ void setup() {
 }
 
 int main() {
+    // default system clock speed is 125 MHz
+    // need to set it before io init or it is bad
+    // stdio_init_all();
+    set_sys_clock_khz(125 * MHZ / 1000, false);
+    clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
+
     memset(zeros, 0, 10);
     setup();
 
     // set PLL multiplier
-    int8_t fr1[] = {FR1, 0x28, 0x00, 0x00};
+    // int8_t fr1[] = {FR1, 0x28, 0x00, 0x00};
+    int8_t fr1[] = {FR1, 0x90, 0x00, 0x00};
     spi_write_blocking(SPI_PORT, fr1, FR1_LEN + 1);
     ad9959_update();
 
-    // Output 20Mhz signal on all channels
-    // uint8_t command[] = {0x04, 0x19, 0x99, 0x99, 0x9A};
-    // spi_write_blocking(SPI_PORT, command, 5);
-    // ad9959_update();
-
-    // try a read
-    // uint8_t x[] ={0x80};
-    // spi_write_blocking(SPI_PORT, x, 1);
-    // uint8_t resp[1];
-    // spi_read_blocking(SPI_PORT, 0, resp, 1);
-
-    // printf("Resp: %x\n", *resp);
-
-    // uint8_t resp[8];
-    // uint8_t resp2[8];
-    // uint8_t select[] = {0x12};
-    // send(CSR, 1, select);
-    // read(CSR, CSR_LEN, resp);
-    // printf("Resp: %x\n", *resp);
-    // read(CFR, CFR_LEN, resp2);
-    // printf("Resp: %x %x %x\n", resp2[0], resp2[1], resp2[2]);
-
-    // us my function
-    set_freq(0, 10000000);
+    set_freq(0, 25 * MHZ);
     ad9959_update();
 
+    printf("howdy\n\n");
 
-
-    sweep_setup(0, 10000000, 30000000, 5);
-    ad9959_update();
-    gpio_put(P0, 1);
-    
-    sleep_ms(6000);
-    // gpio_put(P0, 0);
-    sweep_setup(0, 30000000, 45000000, 3);
-    ad9959_update();
-
-    printf("\n\n==============================\n");
-    char buf[100];
-    scanf("%s", buf);
     return 0;
 }
