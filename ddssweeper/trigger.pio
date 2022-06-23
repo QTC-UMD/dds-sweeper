@@ -1,0 +1,45 @@
+.program trigger
+
+.side_set 1
+
+    pull block      side 0
+    wait 1 pin 0    side 0
+    out pins, 1     side 1
+    push            side 1 [15]
+
+
+% c-sdk {
+
+    static inline void trigger_program_init(PIO pio, uint sm, uint offset, 
+        uint trigger_pin, 
+        uint p_pin, 
+        uint update_pin
+    ) {
+        
+        pio_gpio_init(pio, p_pin);
+        pio_gpio_init(pio, update_pin);
+        pio_gpio_init(pio, trigger_pin);
+
+        pio_sm_set_pindirs_with_mask(pio, sm,
+            (1u << p_pin) | (1u << update_pin) | (1u << trigger_pin),    
+            (1u << p_pin) | (1u << update_pin) | (0u << trigger_pin)    
+        );
+
+        pio_sm_config c = trigger_program_get_default_config(offset);
+
+        sm_config_set_sideset_pins(&c, update_pin);
+        sm_config_set_out_pins(&c, p_pin, 1);
+        sm_config_set_in_pins(&c, trigger_pin);
+
+        sm_config_set_out_shift(&c, true, false, 1);
+        sm_config_set_in_shift(&c, true, true, 1);
+
+        sm_config_set_clkdiv(&c, 1.f);
+
+        pio_sm_init(pio, sm, offset, &c);
+
+        pio_sm_set_enabled(pio, sm, true);
+
+    }
+
+%}
