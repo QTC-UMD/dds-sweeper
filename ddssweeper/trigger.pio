@@ -4,7 +4,7 @@
 
     pull block      side 0
     wait 1 pin 0    side 0
-    out pins, 1     side 1
+    out pins, 1     side 1 [15]
     push            side 1 [15]
 
 

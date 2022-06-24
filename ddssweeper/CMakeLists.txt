@@ -1,6 +1,12 @@
 add_executable(dds-sweeper
         dds-sweeper.c
+        ad9959.c
+        ad9959.h
         )
+
+# target_sources(dds-sweeper
+#         dds-sweeper.c
+#         )
 
 pico_generate_pio_header(dds-sweeper ${CMAKE_CURRENT_LIST_DIR}/trigger.pio)
 
