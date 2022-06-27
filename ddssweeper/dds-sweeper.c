@@ -11,6 +11,8 @@
 #include "pico/stdlib.h"
 #include "trigger.pio.h"
 
+#define VERSION "0.0.0"
+
 // Pins to use controlling the AD9959
 #define PIN_MISO 12
 #define PIN_MOSI 15
@@ -26,21 +28,9 @@
 // SPI config
 #define SPI_PORT spi1
 
-// helper functions
-static void ad9959_reset() {
-    sleep_us(1);
-    gpio_put(PIN_RESET, 1);
-    sleep_us(1);
-    gpio_put(PIN_RESET, 0);
-    sleep_us(1);
-}
-
-static void ad9959_update() {
-    gpio_put(PIN_UPDATE, 1);
-    sleep_us(1);
-    gpio_put(PIN_UPDATE, 0);
-}
-
+// ============================================================================
+// global variables
+// ============================================================================
 typedef struct pio_sm {
     PIO pio;
     uint sm;
@@ -48,24 +38,10 @@ typedef struct pio_sm {
 } pio_sm;
 
 pio_sm trig;
+ad9959_config ad9959;
+char readstring[256];
 
-static void trigger(uint channel, uint val) {
-    pio_sm_put(trig.pio, trig.sm, val);
-    gpio_put(TRIGGER, 1);
-    sleep_us(1);
-    gpio_put(TRIGGER, 0);
-}
-
-static void wait(uint channel) { pio_sm_get_blocking(trig.pio, trig.sm); }
-
-static void update() { trigger(0, 2); }
-
-void init_pin(uint pin) {
-    gpio_init(pin);
-    gpio_set_dir(pin, GPIO_OUT);
-    gpio_put(pin, 0);
-}
-
+// hard-coded sweeps
 // clang-format off
 #define INS_SIZE 17
 uint8_t instructions[] = {
@@ -132,7 +108,33 @@ uint8_t instructions[] = {
 };
 // clang-format on
 
-ad9959_config ad9959;
+// ============================================================================
+// Helper Functions
+// ============================================================================
+void ad9959_reset() {
+    sleep_us(1);
+    gpio_put(PIN_RESET, 1);
+    sleep_us(1);
+    gpio_put(PIN_RESET, 0);
+    sleep_us(1);
+}
+
+void trigger(uint channel, uint val) {
+    pio_sm_put(trig.pio, trig.sm, val);
+    gpio_put(TRIGGER, 1);
+    sleep_us(1);
+    gpio_put(TRIGGER, 0);
+}
+
+void wait(uint channel) { pio_sm_get_blocking(trig.pio, trig.sm); }
+
+void update() { trigger(0, 2); }
+
+void init_pin(uint pin) {
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_OUT);
+    gpio_put(pin, 0);
+}
 
 void background() {
     // let other core know we ready
@@ -188,7 +190,18 @@ void background() {
     wait(0);
 
     spi_write_blocking(SPI_PORT, instructions + (9 * INS_SIZE), INS_SIZE);
+}
 
+void loop() {
+    scanf("%s", readstring);
+    if (strncmp(readstring, "version", 7) == 0) {
+        printf("version: %s\n", VERSION);
+    } else if (strncmp(readstring, "status", 6) == 0) {
+        printf("Running\n");
+
+    } else {
+        printf("Unrecognized command: %s\n", readstring);
+    }
 }
 
 int main() {
@@ -198,7 +211,6 @@ int main() {
 
     // enable output for debugging purposes
     stdio_init_all();
-    printf("\n\nhowdy\n");
 
     // turn on light as indicator that this is working!
     gpio_init(PICO_DEFAULT_LED_PIN);
@@ -206,7 +218,7 @@ int main() {
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
     // init SPI
-    printf("baudrate: %d\n", spi_init(SPI_PORT, 100 * MHZ));
+    spi_init(SPI_PORT, 100 * MHZ);
     spi_set_format(SPI_PORT, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
@@ -215,7 +227,6 @@ int main() {
     // launch other core
     multicore_launch_core1(background);
     multicore_fifo_pop_blocking();
-    printf("Other core has launched\n");
 
     // init the trigger
     trig.pio = pio0;
@@ -225,7 +236,6 @@ int main() {
 
     // init the trigger pin
     init_pin(TRIGGER);
-
 
     // put chip in a known state
     init_pin(PIN_RESET);
@@ -237,42 +247,9 @@ int main() {
 
     update();
 
-    // tell the other core to send the first step
-    multicore_fifo_push_blocking(0);
-    // wait for it to finish
-    multicore_fifo_pop_blocking();
-    trigger(0, 1);
-    trigger(0, 3);
+    while (true) {
+        loop();
+    }
 
-    sleep_us(5);
-    trigger(0, 1);
-    trigger(0, 3);
-
-    sleep_us(5);
-    trigger(0, 1);
-    trigger(0, 3);
-
-    // switch out of no dwell mode
-    sleep_us(5);
-    sleep_us(5);
-    trigger(0, 1);
-
-    sleep_us(5);
-    trigger(0, 1);
-
-    sleep_us(5);
-    sleep_us(5);
-    sleep_us(5);
-    trigger(0, 0);
-
-    sleep_us(5);
-    trigger(0, 1);
-    sleep_us(1);
-    trigger(0, 3);
-
-    sleep_us(5);
-    trigger(0, 1);
-
-    printf("Fin\n");
     return 0;
 }
