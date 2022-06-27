@@ -10,7 +10,7 @@ ad9959_config ad9959_get_default_config() {
     memcpy(c.fr1, "\x01\x90\x00\x00", 4);        // thing
     memcpy(c.fr2, "\x02\x00\x00", 3);            // thing
     memcpy(c.cfr, "\x03\x00\x03\x00", 4);        // thing
-    memcpy(c.cftw0, "\x04\x33\x33\x33\x33", 5);  // thing
+    memcpy(c.cftw0, "\x04\x66\x66\x66\x66", 5);  // thing
     memcpy(c.cpow0, "\x05\x00\x00", 3);          // thing
     memcpy(c.acr, "\x06\x00\x00\x00", 4);        // thing
     memcpy(c.lsrr, "\x07\x00\x00", 3);           // thing
@@ -29,9 +29,8 @@ void ad9959_set_amp_sweep(ad9959_config* c, bool no_dwell) {
     c->cfr[2] &= 0x0b;
     c->cfr[1] |= 0x40;
     c->cfr[2] |= 0x40 | (no_dwell << 7);
-    // c->cfr[3] |= 0x00;
     
-    printf("%02x %02x %02x %02x\n", (c->cfr[0]), (c->cfr[1]), (c->cfr[2]), (c->cfr[3]));
+    // printf("%02x %02x %02x %02x\n", (c->cfr[0]), (c->cfr[1]), (c->cfr[2]), (c->cfr[3]));
 
     spi_write_blocking(c->spi, c->cfr, 4);
 }

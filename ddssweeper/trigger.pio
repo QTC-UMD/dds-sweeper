@@ -1,11 +1,44 @@
 .program trigger
 
-.side_set 1
+.side_set 1 opt
 
-    pull block      side 0
-    wait 1 pin 0    side 0
-    out pins, 1     side 1 [15]
-    push            side 1 [15]
+start:
+    pull block         side 0
+    mov x, osr         
+    jmp x-- update_high
+
+update_low:
+    wait 1 pin 0        
+    out pins, 1         side 1
+    jmp end             
+
+update_high:
+    jmp x-- update      
+    wait 1 pin 0        
+    out pins, 1         side 1
+    jmp end             
+
+update:
+    jmp x-- go_low
+    wait 1 pin 0
+    nop                side 1 [7]
+    jmp start
+
+go_low:
+    set y, 0
+    mov pins, y
+    jmp start
+
+end:
+    push                side 1 [7]
+
+
+
+.program profile_pins
+
+    pull block
+    out pins, 1
+    
 
 
 % c-sdk {
@@ -28,10 +61,37 @@
         pio_sm_config c = trigger_program_get_default_config(offset);
 
         sm_config_set_sideset_pins(&c, update_pin);
-        sm_config_set_out_pins(&c, p_pin, 1);
+        sm_config_set_out_pins(&c, p_pin, 8);
         sm_config_set_in_pins(&c, trigger_pin);
 
         sm_config_set_out_shift(&c, true, false, 1);
+        sm_config_set_in_shift(&c, true, true, 1);
+
+        sm_config_set_clkdiv(&c, 1.f);
+
+        pio_sm_init(pio, sm, offset, &c);
+
+        pio_sm_set_enabled(pio, sm, true);
+ 
+    }
+
+    static inline void profile_pins_program_init(PIO pio, uint sm, uint offset,
+        uint first_pin
+    ) {
+
+        pio_gpio_init(pio, first_pin);
+        ; pio_gpio_init(pio, first_pin + 1);
+        ; pio_gpio_init(pio, first_pin + 2);
+        ; pio_gpio_init(pio, first_pin + 3);
+
+        pio_sm_set_pindirs_with_mask(pio, sm, 1 << first_pin, 1 << first_pin);
+        ; pio_sm_set_pindirs_with_mask(pio, sm, 0xf << first_pin, 0xf << first_pin);
+
+        pio_sm_config c = profile_pins_program_get_default_config(offset);
+
+        sm_config_set_out_pins(&c, first_pin, 1);
+        ; sm_config_set_out_pins(&c, first_pin, 4);
+
         sm_config_set_in_shift(&c, true, true, 1);
 
         sm_config_set_clkdiv(&c, 1.f);
