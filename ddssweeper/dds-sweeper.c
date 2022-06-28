@@ -6,6 +6,7 @@
 #include "ad9959.h"
 #include "hardware/clocks.h"
 #include "hardware/pio.h"
+#include "hardware/pll.h"
 #include "hardware/spi.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -134,6 +135,24 @@ uint8_t instructions[] = {
 
 ad9959_config ad9959;
 
+void resus_callback(void) {
+    // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
+    pll_init(pll_sys, 1, 1500 * MHZ, 6, 2);
+
+    // CLK SYS = PLL SYS (125MHz) / 1 = 125MHz
+    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+                    CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
+                    125 * MHZ);
+
+    // kill external clock pins
+    gpio_set_function(2, GPIO_FUNC_NULL);
+
+    // Reconfigure uart as clocks have changed
+    stdio_init_all();
+    printf("Resus event fired\n");
+
+}
+
 void background() {
     // let other core know we ready
     multicore_fifo_push_blocking(0);
@@ -188,22 +207,33 @@ void background() {
     wait(0);
 
     spi_write_blocking(SPI_PORT, instructions + (9 * INS_SIZE), INS_SIZE);
-
 }
 
 int main() {
+
     // set sysclock to default 125 MHz
     set_sys_clock_khz(125 * MHZ / 1000, false);
+    // have SPI clock follow the system clock for max speed
+    clock_configure(clk_peri, 0,
+                    CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
+                    125 * MHZ);
+    // output system clock on pin 21
     clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
-
-    // enable output for debugging purposes
-    stdio_init_all();
-    printf("\n\nhowdy\n");
+    // enable clock resus if external sys clock is lost
+    clocks_enable_resus(&resus_callback);
 
     // turn on light as indicator that this is working!
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
+
+
+    // enable output
+    stdio_init_all();
+    sleep_ms(1000);
+    printf("\n\nhowdy: %u\n", clock_get_hz(clk_sys));
+
+
 
     // init SPI
     printf("baudrate: %d\n", spi_init(SPI_PORT, 100 * MHZ));
@@ -225,7 +255,6 @@ int main() {
 
     // init the trigger pin
     init_pin(TRIGGER);
-
 
     // put chip in a known state
     init_pin(PIN_RESET);
@@ -273,6 +302,12 @@ int main() {
     sleep_us(5);
     trigger(0, 1);
 
-    printf("Fin\n");
+    printf("Measuring system clock with frequency counter:\n");
+    // Note that the numbering of frequency counter sources is not the
+    // same as the numbering of clock slice register blocks. (If we passed
+    // the clk_sys enum here we would actually end up measuring XOSC.)
+    printf("%u kHz\n", frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS));
+
+    printf("Fin\n\n");
     return 0;
 }
