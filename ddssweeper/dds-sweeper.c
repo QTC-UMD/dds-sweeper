@@ -11,6 +11,8 @@
 #include "pico/stdlib.h"
 #include "trigger.pio.h"
 
+#include "tusb.h"
+
 #define VERSION "0.0.0"
 
 // Pins to use controlling the AD9959
@@ -146,8 +148,23 @@ void background() {
     // nothing to do per se
 }
 
+void readline() {
+    int i = 0;
+    char c;
+    while (true) {
+        c = getchar();
+        if (c == '\n') {
+            readstring[i] = '\0';
+            return;
+        } else {
+            readstring[i++] = c;
+        }
+    }
+}
+
 void loop() {
-    scanf("%s", readstring);
+    readline();
+    // scanf("%s", readstring);
     if (strncmp(readstring, "version", 7) == 0) {
         printf("version: %s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
@@ -164,7 +181,6 @@ int main() {
     clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
     // enable output for debugging purposes
-    stdio_init_all();
 
     // turn on light as indicator that this is working!
     gpio_init(PICO_DEFAULT_LED_PIN);
@@ -200,6 +216,11 @@ int main() {
     ad9959_send_config(&ad9959);
 
     update();
+
+    stdio_init_all();
+    // not sure why, but there is an extra 0xff that needs to get trashed or it
+    // messes everything up
+    getchar();
 
     while (true) {
         loop();
