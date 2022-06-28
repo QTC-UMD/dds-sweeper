@@ -53,7 +53,7 @@ pio_sm trig;
 static void trigger(uint channel, uint val) {
     pio_sm_put(trig.pio, trig.sm, val);
     gpio_put(TRIGGER, 1);
-    sleep_us(1);
+    // sleep_us(1);
     gpio_put(TRIGGER, 0);
 }
 
@@ -296,7 +296,7 @@ int main() {
 
     sleep_us(5);
     trigger(0, 1);
-    sleep_us(1);
+    // sleep_us(1);
     trigger(0, 3);
 
     sleep_us(5);
