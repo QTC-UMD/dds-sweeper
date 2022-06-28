@@ -143,53 +143,7 @@ void background() {
     // wait for signal from the other core
     multicore_fifo_pop_blocking();
 
-    // enter amplitude sweep mode
-    ad9959_set_amp_sweep(&ad9959, true);
-
-    // write the first sweep manually since there was no trigger to cause it
-    spi_write_blocking(SPI_PORT, instructions, 17);
-
-    // for the first one tell the other core it has been prepped so it knows to
-    // start sending the triggers
-    multicore_fifo_push_blocking(0);
-
-    for (int i = 1; i < 3; i++) {
-        wait(0);
-
-        spi_write_blocking(SPI_PORT, instructions + (i * INS_SIZE), INS_SIZE);
-    }
-
-    // test rising to rising ramps
-    wait(0);
-
-    // switch ramp modes
-    spi_write_blocking(SPI_PORT, instructions + (3 * INS_SIZE), INS_SIZE);
-    // 0 => 50
-    spi_write_blocking(SPI_PORT, instructions + (4 * INS_SIZE), INS_SIZE);
-
-    wait(0);
-
-    // 50 +> 100
-    spi_write_blocking(SPI_PORT, instructions + (5 * INS_SIZE), INS_SIZE);
-
-    wait(0);
-
-    // turn off autoclear
-    spi_write_blocking(SPI_PORT, instructions + (6 * INS_SIZE), INS_SIZE);
-    update();
-
-    // 100 => 50
-    spi_write_blocking(SPI_PORT, instructions + (7 * INS_SIZE), INS_SIZE);
-
-    // wait(0);
-    wait(0);
-
-    // 100 => 25
-    spi_write_blocking(SPI_PORT, instructions + (8 * INS_SIZE), INS_SIZE);
-
-    wait(0);
-
-    spi_write_blocking(SPI_PORT, instructions + (9 * INS_SIZE), INS_SIZE);
+    // nothing to do per se
 }
 
 void loop() {
