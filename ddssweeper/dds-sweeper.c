@@ -11,10 +11,13 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger.pio.h"
-
 #include "tusb.h"
 
 #define VERSION "0.0.0"
+bool DEBUG;
+
+#define printd(x) \
+    if (DEBUG) printf(x);
 
 // Pins to use controlling the AD9959
 #define PIN_MISO 12
@@ -139,6 +142,30 @@ void init_pin(uint pin) {
     gpio_put(pin, 0);
 }
 
+void measure_freqs(void) {
+    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
+    // License
+    uint f_pll_sys =
+        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
+    uint f_pll_usb =
+        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
+    uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
+    uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
+    uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
+    uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
+    uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+    uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+
+    printf("pll_sys = %dkHz\n", f_pll_sys);
+    printf("pll_usb = %dkHz\n", f_pll_usb);
+    printf("rosc = %dkHz\n", f_rosc);
+    printf("clk_sys = %dkHz\n", f_clk_sys);
+    printf("clk_peri = %dkHz\n", f_clk_peri);
+    printf("clk_usb = %dkHz\n", f_clk_usb);
+    printf("clk_adc = %dkHz\n", f_clk_adc);
+    printf("clk_rtc = %dkHz\n", f_clk_rtc);
+}
+
 void resus_callback(void) {
     // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
     pll_init(pll_sys, 1, 1500 * MHZ, 6, 2);
@@ -151,10 +178,12 @@ void resus_callback(void) {
     // kill external clock pins
     gpio_set_function(2, GPIO_FUNC_NULL);
 
-    // Reconfigure uart as clocks have changed
+    // Reconfigure IO
     stdio_init_all();
     printf("Resus event fired\n");
 
+    // Wait for uart output to finish
+    uart_default_tx_wait_blocking();
 }
 
 void background() {
@@ -188,15 +217,21 @@ void loop() {
         printf("version: %s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
         printf("Running\n");
-
+    } else if (strncmp(readstring, "debug on", 8) == 0) {
+        DEBUG = 1;
+        printf("ok\n");
+    } else if (strncmp(readstring, "debug off", 8) == 0) {
+        DEBUG = 0;
+        printf("ok\n");
+    } else if (strncmp(readstring, "getfreqs", 8) == 0) {
+        measure_freqs();
+        printf("ok\n");
     } else {
         printf("Unrecognized command: %s\n", readstring);
     }
-
 }
 
 int main() {
-
     // set sysclock to default 125 MHz
     set_sys_clock_khz(125 * MHZ / 1000, false);
     // have SPI clock follow the system clock for max speed
@@ -208,20 +243,10 @@ int main() {
     // enable clock resus if external sys clock is lost
     clocks_enable_resus(&resus_callback);
 
-
-
     // turn on light as indicator that this is working!
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
-
-
-    // enable output
-    stdio_init_all();
-    sleep_ms(1000);
-    printf("\n\nhowdy: %u\n", clock_get_hz(clk_sys));
-
-
 
     // init SPI
     spi_init(SPI_PORT, 100 * MHZ);
@@ -248,15 +273,13 @@ int main() {
     ad9959_reset();
 
     ad9959 = ad9959_get_default_config();
-    ad9959_set_spi(&ad9959, SPI_PORT);
+    ad9959_config_spi(&ad9959, SPI_PORT);
     ad9959_send_config(&ad9959);
 
     update();
 
     stdio_init_all();
-    // not sure why, but there is an extra 0xff that needs to get trashed or it
-    // messes everything up
-    getchar();
+    stdio_init_all();
 
     while (true) {
         loop();
