@@ -11,6 +11,10 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger.pio.h"
+#include "tusb.h"
+
+#define printd(x) \
+    if (DEBUG) printf("%s\n", x);
 
 // Pins to use controlling the AD9959
 #define PIN_MISO 12
@@ -27,21 +31,9 @@
 // SPI config
 #define SPI_PORT spi1
 
-// helper functions
-static void ad9959_reset() {
-    sleep_us(1);
-    gpio_put(PIN_RESET, 1);
-    sleep_us(1);
-    gpio_put(PIN_RESET, 0);
-    sleep_us(1);
-}
-
-static void ad9959_update() {
-    gpio_put(PIN_UPDATE, 1);
-    sleep_us(1);
-    gpio_put(PIN_UPDATE, 0);
-}
-
+// ============================================================================
+// global variables
+// ============================================================================
 typedef struct pio_sm {
     PIO pio;
     uint sm;
@@ -49,23 +41,10 @@ typedef struct pio_sm {
 } pio_sm;
 
 pio_sm trig;
-
-static void trigger(uint channel, uint val) {
-    pio_sm_put(trig.pio, trig.sm, val);
-    gpio_put(TRIGGER, 1);
-    // sleep_us(1);
-    gpio_put(TRIGGER, 0);
-}
-
-static void wait(uint channel) { pio_sm_get_blocking(trig.pio, trig.sm); }
-
-static void update() { trigger(0, 2); }
-
-void init_pin(uint pin) {
-    gpio_init(pin);
-    gpio_set_dir(pin, GPIO_OUT);
-    gpio_put(pin, 0);
-}
+ad9959_config ad9959;
+char readstring[256];
+#define VERSION "0.0.0"
+bool DEBUG = true;
 
 // clang-format off
 #define INS_SIZE 17
@@ -133,7 +112,57 @@ uint8_t instructions[] = {
 };
 // clang-format on
 
-ad9959_config ad9959;
+// ============================================================================
+// Helper Functions
+// ============================================================================
+void ad9959_reset() {
+    sleep_us(1);
+    gpio_put(PIN_RESET, 1);
+    sleep_us(1);
+    gpio_put(PIN_RESET, 0);
+    sleep_us(1);
+}
+
+void trigger(uint channel, uint val) {
+    pio_sm_put(trig.pio, trig.sm, val);
+    gpio_put(TRIGGER, 1);
+    // sleep_us(1);
+    gpio_put(TRIGGER, 0);
+}
+
+void wait(uint channel) { pio_sm_get_blocking(trig.pio, trig.sm); }
+
+void update() { trigger(0, 2); }
+
+void init_pin(uint pin) {
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_OUT);
+    gpio_put(pin, 0);
+}
+
+void measure_freqs(void) {
+    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
+    // License
+    uint f_pll_sys =
+        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
+    uint f_pll_usb =
+        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
+    uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
+    uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
+    uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
+    uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
+    uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+    uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+
+    printf("pll_sys = %dkHz\n", f_pll_sys);
+    printf("pll_usb = %dkHz\n", f_pll_usb);
+    printf("rosc = %dkHz\n", f_rosc);
+    printf("clk_sys = %dkHz\n", f_clk_sys);
+    printf("clk_peri = %dkHz\n", f_clk_peri);
+    printf("clk_usb = %dkHz\n", f_clk_usb);
+    printf("clk_adc = %dkHz\n", f_clk_adc);
+    printf("clk_rtc = %dkHz\n", f_clk_rtc);
+}
 
 void resus_callback(void) {
     // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
@@ -147,70 +176,93 @@ void resus_callback(void) {
     // kill external clock pins
     gpio_set_function(2, GPIO_FUNC_NULL);
 
-    // Reconfigure uart as clocks have changed
+    // Reconfigure IO
     stdio_init_all();
     printf("Resus event fired\n");
 
+    // Wait for uart output to finish
+    uart_default_tx_wait_blocking();
 }
 
 void background() {
     // let other core know we ready
     multicore_fifo_push_blocking(0);
 
-    // wait for signal from the other core
+    // wait for the batsignal
     multicore_fifo_pop_blocking();
 
-    // enter amplitude sweep mode
-    ad9959_set_amp_sweep(&ad9959, true);
+    ad9959_config_amp_sweep(&ad9959, 0, false);
+    ad9959_send_config(&ad9959);
 
-    // write the first sweep manually since there was no trigger to cause it
-    spi_write_blocking(SPI_PORT, instructions, 17);
-
-    // for the first one tell the other core it has been prepped so it knows to
-    // start sending the triggers
-    multicore_fifo_push_blocking(0);
-
-    for (int i = 1; i < 3; i++) {
-        wait(0);
-
-        spi_write_blocking(SPI_PORT, instructions + (i * INS_SIZE), INS_SIZE);
-    }
-
-    // test rising to rising ramps
-    wait(0);
-
-    // switch ramp modes
-    spi_write_blocking(SPI_PORT, instructions + (3 * INS_SIZE), INS_SIZE);
-    // 0 => 50
-    spi_write_blocking(SPI_PORT, instructions + (4 * INS_SIZE), INS_SIZE);
-
-    wait(0);
-
-    // 50 +> 100
-    spi_write_blocking(SPI_PORT, instructions + (5 * INS_SIZE), INS_SIZE);
-
-    wait(0);
-
-    // turn off autoclear
-    spi_write_blocking(SPI_PORT, instructions + (6 * INS_SIZE), INS_SIZE);
     update();
 
-    // 100 => 50
-    spi_write_blocking(SPI_PORT, instructions + (7 * INS_SIZE), INS_SIZE);
+    spi_write_blocking(ad9959.spi, instructions, 17);
 
-    // wait(0);
+    pio_sm_put(trig.pio, trig.sm, 1);
     wait(0);
+    printf("Triggered\n");
+}
 
-    // 100 => 25
-    spi_write_blocking(SPI_PORT, instructions + (8 * INS_SIZE), INS_SIZE);
+void readline() {
+    int i = 0;
+    char c;
+    while (true) {
+        c = getchar();
+        if (c == '\n') {
+            readstring[i] = '\0';
+            return;
+        } else {
+            readstring[i++] = c;
+        }
+    }
+}
 
-    wait(0);
+void loop() {
+    readline();
 
-    spi_write_blocking(SPI_PORT, instructions + (9 * INS_SIZE), INS_SIZE);
+    if (DEBUG) printf("%s\n", readstring);
+
+    if (strncmp(readstring, "version", 7) == 0) {
+        printf("version: %s\n", VERSION);
+    } else if (strncmp(readstring, "status", 6) == 0) {
+        printf("Running\n");
+    } else if (strncmp(readstring, "debug on", 8) == 0) {
+        DEBUG = 1;
+        printf("ok\n");
+    } else if (strncmp(readstring, "debug off", 9) == 0) {
+        DEBUG = 0;
+        printf("ok\n");
+    } else if (strncmp(readstring, "getfreqs", 8) == 0) {
+        measure_freqs();
+        printf("ok\n");
+    } else if (strncmp(readstring, "setfreq", 7) == 0) {
+        uint channel;
+        double freq;
+        int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
+        if (parsed < 2) {
+            printf(
+                "Invalid Command - too few arguments - expected: setfreq "
+                "<channel:int> <frequency:double>\n");
+        } else if (channel < 0 || channel > 3) {
+            printf("Invalid Command - channel must be in range 0-3\n");
+        } else {
+            uint64_t word = ad9959_config_freq(&ad9959, channel, freq);
+            ad9959_send_config(&ad9959);
+            update();
+
+            if (DEBUG) {
+                double f = word * ad9959.sys_clk / 4294967296.l;
+                printf("%12lf\n", f);
+            }
+
+            printf("ok\n");
+        }
+    } else {
+        printf("Unrecognized command: %s\n", readstring);
+    }
 }
 
 int main() {
-
     // set sysclock to default 125 MHz
     set_sys_clock_khz(125 * MHZ / 1000, false);
     // have SPI clock follow the system clock for max speed
@@ -227,16 +279,8 @@ int main() {
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
-
-    // enable output
-    stdio_init_all();
-    sleep_ms(1000);
-    printf("\n\nhowdy: %u\n", clock_get_hz(clk_sys));
-
-
-
     // init SPI
-    printf("baudrate: %d\n", spi_init(SPI_PORT, 100 * MHZ));
+    spi_init(SPI_PORT, 100 * MHZ);
     spi_set_format(SPI_PORT, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
@@ -245,7 +289,6 @@ int main() {
     // launch other core
     multicore_launch_core1(background);
     multicore_fifo_pop_blocking();
-    printf("Other core has launched\n");
 
     // init the trigger
     trig.pio = pio0;
@@ -261,53 +304,19 @@ int main() {
     ad9959_reset();
 
     ad9959 = ad9959_get_default_config();
-    ad9959_set_spi(&ad9959, SPI_PORT);
+    ad9959_config_spi(&ad9959, SPI_PORT);
     ad9959_send_config(&ad9959);
 
     update();
 
-    // tell the other core to send the first step
+    stdio_init_all();
+    stdio_init_all();
+
+    // let the other guy loose
     multicore_fifo_push_blocking(0);
-    // wait for it to finish
-    multicore_fifo_pop_blocking();
-    trigger(0, 1);
-    trigger(0, 3);
 
-    sleep_us(5);
-    trigger(0, 1);
-    trigger(0, 3);
-
-    sleep_us(5);
-    trigger(0, 1);
-    trigger(0, 3);
-
-    // switch out of no dwell mode
-    sleep_us(5);
-    sleep_us(5);
-    trigger(0, 1);
-
-    sleep_us(5);
-    trigger(0, 1);
-
-    sleep_us(5);
-    sleep_us(5);
-    sleep_us(5);
-    trigger(0, 0);
-
-    sleep_us(5);
-    trigger(0, 1);
-    // sleep_us(1);
-    trigger(0, 3);
-
-    sleep_us(5);
-    trigger(0, 1);
-
-    printf("Measuring system clock with frequency counter:\n");
-    // Note that the numbering of frequency counter sources is not the
-    // same as the numbering of clock slice register blocks. (If we passed
-    // the clk_sys enum here we would actually end up measuring XOSC.)
-    printf("%u kHz\n", frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS));
-
-    printf("Fin\n\n");
+    while (true) {
+        loop();
+    }
     return 0;
 }
