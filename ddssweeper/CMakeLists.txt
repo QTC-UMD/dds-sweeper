@@ -16,7 +16,7 @@ target_link_libraries(dds-sweeper
 
 # UART/USB config
 pico_enable_stdio_usb(dds-sweeper 1)
-pico_enable_stdio_uart(dds-sweeper 0)
+pico_enable_stdio_uart(dds-sweeper 1)
 
 # create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(dds-sweeper)
