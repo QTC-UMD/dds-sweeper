@@ -33,13 +33,19 @@ void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
     c->cfr[channel][2] |= 0x40 | (no_dwell << 7);
 }
 
-void ad9959_config_freq(ad9959_config* c, uint channel, uint32_t freq) {
+uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
     uint32_t ftw = (uint32_t) round(freq * 4294967296.l / c->sys_clk);
+
+    // get the 32 bit int as an array of 8 bit ints
     volatile uint8_t *bytes = (volatile uint8_t *) &ftw;
     
+    // pico is little endian, but ad9959 expects big endian
     for (int i = 0; i < 4; i++) {
+        // 1 offset for the register address
         c->cftw0[channel][i + 1] = bytes[3 - i];
     }
+
+    return ftw;
 }
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {

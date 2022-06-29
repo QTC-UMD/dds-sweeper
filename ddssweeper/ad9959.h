@@ -33,7 +33,7 @@ void ad9959_config_spi(ad9959_config* c, spi_inst_t* spi);
 void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell);
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val);
 void ad9959_config_sys_clk(ad9959_config* c, uint32_t val);
-void ad9959_config_freq(ad9959_config* c, uint channel,  uint32_t freq);
+uint32_t ad9959_config_freq(ad9959_config* c, uint channel,  double freq);
 
 void ad9959_send_config(ad9959_config* c);
 

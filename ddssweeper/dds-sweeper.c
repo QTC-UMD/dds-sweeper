@@ -14,7 +14,7 @@
 #include "tusb.h"
 
 #define printd(x) \
-    if (DEBUG) printf(x);
+    if (DEBUG) printf("%s\n", x);
 
 // Pins to use controlling the AD9959
 #define PIN_MISO 12
@@ -144,8 +144,9 @@ void readline() {
 
 void loop() {
     readline();
-    printd(readstring);
-    // scanf("%s", readstring);
+
+    if (DEBUG) printf("%s\n", readstring);
+
     if (strncmp(readstring, "version", 7) == 0) {
         printf("version: %s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
@@ -160,14 +161,27 @@ void loop() {
         measure_freqs();
         printf("ok\n");
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
-        uint channel, freq;
-        sscanf(readstring, "%*s %u %u", &channel, &freq);
+        uint channel;
+        double freq;
+        int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
+        if (parsed < 2) {
+            printf(
+                "Invalid Command - too few arguments - expected: setfreq "
+                "<channel:int> <frequency:double>\n");
+        } else if (channel < 0 || channel > 3) {
+            printf("Invalid Command - channel must be in range 0-3\n");
+        } else {
+            uint64_t word = ad9959_config_freq(&ad9959, channel, freq);
+            ad9959_send_config(&ad9959);
+            update();
 
-        ad9959_config_freq(&ad9959, channel, freq);
-        ad9959_send_config(&ad9959);
-        update();
+            if (DEBUG) {
+                double f = word * ad9959.sys_clk / 4294967296.l;
+                printf("%12lf\n", f);
+            }
 
-        printf("ok\n");
+            printf("ok\n");
+        }
     } else {
         printf("Unrecognized command: %s\n", readstring);
     }
