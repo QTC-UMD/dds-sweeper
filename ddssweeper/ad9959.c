@@ -34,19 +34,12 @@ void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
 }
 
 void ad9959_config_freq(ad9959_config* c, uint channel, uint32_t freq) {
-    printf("1\n");
-    uint32_t ftw;
-    printf("2\n");
-    ftw = (uint32_t) round(freq * 4294967296.l / c->sys_clk);
-    printf("3\n");
-    volatile uint8_t *bytes = (volatile uint8_t *) ftw;
-    printf("4\n");
+    uint32_t ftw = (uint32_t) round(freq * 4294967296.l / c->sys_clk);
+    volatile uint8_t *bytes = (volatile uint8_t *) &ftw;
     
     for (int i = 0; i < 4; i++) {
         c->cftw0[channel][i + 1] = bytes[3 - i];
-        printf("%x ", bytes[3 - i]);
     }
-    printf("\n");
 }
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {

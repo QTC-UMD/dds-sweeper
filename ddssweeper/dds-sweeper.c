@@ -44,7 +44,7 @@ pio_sm trig;
 ad9959_config ad9959;
 char readstring[256];
 #define VERSION "0.0.0"
-bool DEBUG;
+bool DEBUG = true;
 
 // ============================================================================
 // Helper Functions
@@ -161,12 +161,11 @@ void loop() {
         printf("ok\n");
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
         uint channel, freq;
-        printd("Made it\n");
-        scanf("%*s %u %u", &channel, &freq);
+        sscanf(readstring, "%*s %u %u", &channel, &freq);
 
         ad9959_config_freq(&ad9959, channel, freq);
-        printd("Made it1\n");
         ad9959_send_config(&ad9959);
+        update();
 
         printf("ok\n");
     } else {
@@ -224,9 +223,7 @@ int main() {
     stdio_init_all();
     stdio_init_all();
 
-    sleep_ms(1000);
-
-    ad9959_config_freq(&ad9959, 0, 150 * MHZ);
+    // ad9959_config_freq(&ad9959, 0, 150 * MHZ);
 
     while (true) {
         loop();
