@@ -20,14 +20,15 @@ update_high:
 
 update:
     jmp x-- go_low
-    wait 1 pin 0
+    ; wait 1 pin 0
     nop                side 1 [7]
     jmp start
 
 go_low:
     set y, 0
+    wait 1 pin 0        
     mov pins, y
-    jmp start
+    jmp end
 
 end:
     push                side 1 [7]

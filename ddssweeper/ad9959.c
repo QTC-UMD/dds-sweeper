@@ -27,10 +27,14 @@ ad9959_config ad9959_get_default_config() {
 void ad9959_config_spi(ad9959_config* c, spi_inst_t* spi) { c->spi = spi; }
 
 void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
-    c->cfr[channel][1] &= 0x03;
-    c->cfr[channel][2] &= 0x0b;
-    c->cfr[channel][1] |= 0x40;
-    c->cfr[channel][2] |= 0x40 | (no_dwell << 7);
+    // c->cfr[channel][1] &= 0x03;
+    // c->cfr[channel][2] &= 0x0b;
+    // c->cfr[channel][1] |= 0x40;
+    // c->cfr[channel][2] |= 0x40 | (no_dwell << 7);
+
+    c->cfr[channel][1] = 0x40;
+    c->cfr[channel][2] = 0x63;
+    c->cfr[channel][3] = 0x00;
 }
 
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
