@@ -4,10 +4,12 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include "hardware/clocks.h"
+#include "hardware/structs/watchdog.h"
 
 typedef struct ad9959_config {
     uint8_t csr[2];
@@ -31,7 +33,7 @@ void ad9959_config_spi(ad9959_config* c, spi_inst_t* spi);
 void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell);
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val);
 void ad9959_config_sys_clk(ad9959_config* c, uint32_t val);
-void ad9959_config_freq(ad9959_config* c, uint32_t freq);
+void ad9959_config_freq(ad9959_config* c, uint channel,  uint32_t freq);
 
 void ad9959_send_config(ad9959_config* c);
 

@@ -18,7 +18,7 @@ ad9959_config ad9959_get_default_config() {
         memcpy(c.fdw[i], "\x09\x00\x00\x00\x00", 5);
     }
 
-    c.sys_clk = 125 * MHZ;
+    c.sys_clk = 125 * MHZ * 4;
     c.pll_mult = 4;
 
     return c;
@@ -31,15 +31,23 @@ void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
     c->cfr[channel][2] &= 0x0b;
     c->cfr[channel][1] |= 0x40;
     c->cfr[channel][2] |= 0x40 | (no_dwell << 7);
-
-    // printf("%02x %02x %02x %02x\n", (c->cfr[0]), (c->cfr[1]), (c->cfr[2]),
-    // (c->cfr[3]));
-
-    // should not send in set instructions
-    // spi_write_blocking(c->spi, c->cfr, 4);
 }
 
-void ad9959_config_freq(ad9959_config* c, uint32_t freq) {}
+void ad9959_config_freq(ad9959_config* c, uint channel, uint32_t freq) {
+    printf("1\n");
+    uint32_t ftw;
+    printf("2\n");
+    ftw = (uint32_t) round(freq * 4294967296.l / c->sys_clk);
+    printf("3\n");
+    volatile uint8_t *bytes = (volatile uint8_t *) ftw;
+    printf("4\n");
+    
+    for (int i = 0; i < 4; i++) {
+        c->cftw0[channel][i + 1] = bytes[3 - i];
+        printf("%x ", bytes[3 - i]);
+    }
+    printf("\n");
+}
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {
     c->pll_mult = val;
