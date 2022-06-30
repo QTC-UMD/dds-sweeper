@@ -13,9 +13,9 @@ ad9959_config ad9959_get_default_config() {
         memcpy(c.cftw0[i], "\x04\x66\x66\x66\x66", 5);
         memcpy(c.cpow0[i], "\x05\x00\x00", 3);
         memcpy(c.acr[i], "\x06\x00\x00\x00", 4);
-        memcpy(c.lsrr[i], "\x07\x00\x00", 3);
-        memcpy(c.rdw[i], "\x08\x00\x00\x00\x00", 5);
-        memcpy(c.fdw[i], "\x09\x00\x00\x00\x00", 5);
+        memcpy(c.lsrr[i], "\x07\x01\x01", 3);
+        memcpy(c.rdw[i], "\x08\x00\x40\x00\x00", 5);
+        memcpy(c.fdw[i], "\x09\x00\x40\x00\x00", 5);
     }
 
     c.sys_clk = 125 * MHZ * 4;
@@ -33,16 +33,16 @@ void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
     // c->cfr[channel][2] |= 0x40 | (no_dwell << 7);
 
     c->cfr[channel][1] = 0x40;
-    c->cfr[channel][2] = 0x63;
+    c->cfr[channel][2] = 0x43;
     c->cfr[channel][3] = 0x00;
 }
 
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
-    uint32_t ftw = (uint32_t) round(freq * 4294967296.l / c->sys_clk);
+    uint32_t ftw = (uint32_t)round(freq * 4294967296.l / c->sys_clk);
 
     // get the 32 bit int as an array of 8 bit ints
-    volatile uint8_t *bytes = (volatile uint8_t *) &ftw;
-    
+    volatile uint8_t* bytes = (volatile uint8_t*)&ftw;
+
     // pico is little endian, but ad9959 expects big endian
     for (int i = 0; i < 4; i++) {
         // 1 offset for the register address
@@ -82,4 +82,53 @@ void ad9959_send_config(ad9959_config* c) {
     }
 
     spi_write_blocking(c->spi, c->csr, 2);
+}
+
+static void read(ad9959_config* c, uint8_t reg, size_t len, uint8_t* buf) {
+    reg |= 0x80;
+    spi_write_blocking(c->spi, &reg, 1);
+    spi_read_blocking(c->spi, 0, buf, len);
+}
+
+void ad9959_read_all(ad9959_config* c) {
+    uint8_t resp[20];
+
+    read(c, 0x00, 1, resp);
+    printf(" CSR: %02x\n", resp[0]);
+
+    read(c, 0x01, 3, resp);
+    printf(" FR1: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+
+    read(c, 0x02, 2, resp);
+    printf(" FR2: %02x %02x\n", resp[0], resp[1]);
+
+    for (int i = 0; i < 4; i++) {
+        printf("CHANNEL %d:\n", i);
+
+        uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x02};
+
+        spi_write_blocking(c->spi, csr, 2);
+
+        read(c, 0x03, 3, resp);
+        printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+
+        read(c, 0x04, 4, resp);
+        printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+
+        read(c, 0x05, 2, resp);
+        printf("CPOW: %02x %02x\n", resp[0], resp[1]);
+
+        read(c, 0x06, 3, resp);
+        printf(" ACR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+
+        read(c, 0x07, 2, resp);
+        printf("LSRR: %02x %02x\n", resp[0], resp[1]);
+
+        read(c, 0x08, 4, resp);
+        printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+
+        read(c, 0x09, 4, resp);
+        printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+
+    }
 }

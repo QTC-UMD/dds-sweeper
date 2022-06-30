@@ -28,6 +28,8 @@
 // SPI config
 #define SPI_PORT spi1
 
+#define UPDATE 0
+
 // ============================================================================
 // global variables
 // ============================================================================
@@ -47,7 +49,7 @@ bool DEBUG = true;
 #define INS_SIZE 22
 uint8_t instructions[] = {
     // 0 => 100
-    0x06, 0x00, 0x00, 0x00,
+    0x06, 0x00, 0x02, 0x00,
     0x07, 0x01, 0x01,
     0x08, 0x00, 0x40, 0x00, 0x00,
     0x09, 0x00, 0x40, 0x00, 0x00,
@@ -57,6 +59,7 @@ uint8_t instructions[] = {
     0x06, 0x00, 0x02, 0x00,
     0x07, 0x01, 0x01,
     0x08, 0x00, 0x40, 0x00, 0x00,
+    0x09, 0x00, 0x40, 0x00, 0x00,
     0x0a, 0xff, 0xc0, 0x00, 0x00,
 
 };
@@ -82,7 +85,7 @@ void trigger(uint channel, uint val) {
 
 void wait(uint channel) { pio_sm_get_blocking(trig.pio, trig.sm); }
 
-void update() { trigger(0, 2); }
+void update() { pio_sm_put(trig.pio, trig.sm, 0); }
 
 void init_pin(uint pin) {
     gpio_init(pin);
@@ -141,25 +144,25 @@ void background() {
     // wait for the batsignal
     multicore_fifo_pop_blocking();
 
+    return;
+
     ad9959_config_amp_sweep(&ad9959, 0, false);
     ad9959_send_config(&ad9959);
 
-    pio_sm_put(trig.pio, trig.sm, 2);
-
     spi_write_blocking(ad9959.spi, instructions, INS_SIZE);
+    update();
 
     pio_sm_put(trig.pio, trig.sm, 1);
     wait(0);
-    pio_sm_put(trig.pio, trig.sm, 3);
+    pio_sm_put(trig.pio, trig.sm, 2);
     wait(0);
     pio_sm_put(trig.pio, trig.sm, 1);
     wait(0);
-    pio_sm_put(trig.pio, trig.sm, 3);
+    pio_sm_put(trig.pio, trig.sm, 2);
     wait(0);
 
     printf("fin\n");
 
-    // spi_write_blocking(ad9959.spi, instructions + INS_SIZE, INS_SIZE);
 }
 
 void readline() {
@@ -193,6 +196,9 @@ void loop() {
         printf("ok\n");
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
+        printf("ok\n");
+    } else if (strncmp(readstring, "readregs", 8) == 0) {
+        ad9959_read_all(&ad9959);
         printf("ok\n");
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
         uint channel;
@@ -240,7 +246,7 @@ int main() {
 
     // init SPI
     spi_init(SPI_PORT, 100 * MHZ);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);

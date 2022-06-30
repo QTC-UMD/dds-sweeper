@@ -5,33 +5,16 @@
 start:
     pull block         side 0
     mov x, osr         
-    jmp x-- update_high
-
-update_low:
-    wait 1 pin 0        
-    out pins, 1         side 1
-    jmp end             
-
-update_high:
-    jmp x-- update      
-    wait 1 pin 0        
-    out pins, 1         side 1
-    jmp end             
+    jmp x-- trigger
 
 update:
-    jmp x-- go_low
-    ; wait 1 pin 0
-    nop                side 1 [7]
-    jmp start
+    jmp start           side 1 [7]            
 
-go_low:
-    set y, 0
+trigger:
     wait 1 pin 0        
-    mov pins, y
-    jmp end
-
-end:
+    out pins, 1         side 1
     push                side 1 [7]
+
 
 
 
