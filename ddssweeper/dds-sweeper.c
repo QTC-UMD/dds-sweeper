@@ -198,7 +198,7 @@ void background() {
                 break;
             }
 
-            spi_write_blocking(ad9959.spi, instructions + offset + 1, INS_SIZE);
+            spi_write_blocking(ad9959.spi, instructions + offset + 1, INS_SIZE - 1);
             pio_sm_put(trig.pio, trig.sm, instructions[offset]);
             // printf("Waiting...\n");
             wait(0);
