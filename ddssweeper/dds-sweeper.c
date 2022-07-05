@@ -166,19 +166,19 @@ void background() {
     update();
 
 
-    spi_write_blocking(ad9959.spi, instructions, INS_SIZE);
+    spi_write_blocking(ad9959.spi, test, INS_SIZE);
     pio_sm_put(trig.pio, trig.sm, TRIG_DOWN);
     wait(0);
 
-    spi_write_blocking(ad9959.spi, instructions + (1 * INS_SIZE), INS_SIZE);
+    spi_write_blocking(ad9959.spi, test + (1 * INS_SIZE), INS_SIZE);
     pio_sm_put(trig.pio, trig.sm, TRIG_DOWN);
     wait(0);
 
-    spi_write_blocking(ad9959.spi, instructions + (2 * INS_SIZE), INS_SIZE);
+    spi_write_blocking(ad9959.spi, test + (2 * INS_SIZE), INS_SIZE);
     pio_sm_put(trig.pio, trig.sm, TRIG_UP);
     wait(0);
 
-    spi_write_blocking(ad9959.spi, instructions + (3 * INS_SIZE), INS_SIZE);
+    spi_write_blocking(ad9959.spi, test + (3 * INS_SIZE), INS_SIZE);
     pio_sm_put(trig.pio, trig.sm, TRIG_UP);
     wait(0);
 
