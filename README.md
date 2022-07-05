@@ -31,7 +31,7 @@ Turns on extra debug messages printed over serial. `state` should be `on` or `of
 * `setfreq <channel:int> <frequency:float>`:
 
 
-* `configtable <type:int> <no dwell:int>`:
+* `config <type:int> <no dwell:int>`:
 0: single tone
 1: amp
 2: freq

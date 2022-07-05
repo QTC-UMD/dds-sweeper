@@ -13,34 +13,30 @@
 #include "trigger.pio.h"
 #include "tusb.h"
 
-// Pins to use controlling the AD9959
-#define PIN_MISO 12
-#define PIN_MOSI 15
-#define PIN_SCK 14
-#define PIN_RESET 20
-#define PIN_UPDATE 22
-#define P0 16
-#define P1 17
-#define P2 18
-#define P3 19
-#define TRIGGER 8
+// Default Pins to use
+uint PIN_MISO = 12;
+uint PIN_MOSI = 15;
+uint PIN_SCK = 14;
+uint PIN_RESET = 20;
+uint PIN_UPDATE = 22;
+uint P0 = 16;
+uint P1 = 17;
+uint P2 = 18;
+uint P3 = 19;
+uint TRIGGER = 8;
 
 // SPI config
-#define SPI_PORT spi1
+spi_inst_t* SPI_PORT = spi1;
 
 // Mutex for status
 static mutex_t status_mutex;
 static mutex_t wait_mutex;
 
 // STATUS flag
-int status;
 #define STOPPED 0
-#define TRANSITION_TO_RUNNING 1
-#define RUNNING 2
-#define ABORT_REQUESTED 3
-#define ABORTING 4
-#define ABORTED 5
-#define TRANSITION_TO_STOP 6
+#define RUNNING 1
+#define ABORTED 2
+int status = STOPPED;
 
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
@@ -178,26 +174,32 @@ void background() {
     // let other core know we ready
     multicore_fifo_push_blocking(0);
 
-    printf("wat\n");
-
-    // wait for the batsignal
-    multicore_fifo_pop_blocking();
-
-    printf("Starting\n");
-
-    ad9959_send_config(&ad9959);
-    update();
-
-    // make sure this will not overflow with real big numbers of instructions
-    // that would be pretty silly though
-    int i = 0;
-
     while (true) {
-        spi_write_blocking(ad9959.spi, instructions + (INS_SIZE * (i++)),
-                           INS_SIZE);
-        pio_sm_put(trig.pio, trig.sm, TRIG_UP);
-        // printf("Waiting...\n");
-        wait(0);
+        // wait for the batsignal
+        uint hwstart = multicore_fifo_pop_blocking();
+
+        ad9959_send_config(&ad9959);
+        update();
+
+        set_status(RUNNING);
+
+        // make sure this will not overflow with real big numbers of
+        // instructions that would be pretty silly though
+        int i = 0;
+
+        while (true) {
+            // If an instruction is empty that means to stop
+            if (instructions[INS_SIZE * i] == 0x00) {
+                set_status(ABORTED);
+                break;
+            }
+
+            spi_write_blocking(ad9959.spi, instructions + (INS_SIZE * (i++)),
+                               INS_SIZE);
+            pio_sm_put(trig.pio, trig.sm, TRIG_UP);
+            // printf("Waiting...\n");
+            wait(0);
+        }
     }
 }
 
@@ -318,7 +320,11 @@ void loop() {
 
     } else if (strncmp(readstring, "start", 5) == 0) {
         multicore_fifo_push_blocking(0);
-
+        set_status(RUNNING);
+        printf("OK\n");
+    } else if (strncmp(readstring, "hwstart", 5) == 0) {
+        multicore_fifo_push_blocking(1);
+        set_status(RUNNING);
         printf("OK\n");
     } else {
         printf("Unrecognized command: \"%s\"\n", readstring);
@@ -362,9 +368,6 @@ int main() {
     trig.sm = pio_claim_unused_sm(pio0, true);
     trig.offset = pio_add_program(pio0, &trigger_program);
     trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P3, PIN_UPDATE);
-
-    // init the trigger pin
-    init_pin(TRIGGER);
 
     // put chip in a known state
     init_pin(PIN_RESET);
