@@ -34,7 +34,7 @@ void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
 
     c->cfr[channel][1] = 0x40;
     c->cfr[channel][2] = 0x43;
-    c->cfr[channel][3] = 0x00;
+    c->cfr[channel][3] = 0x10;
 }
 
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {

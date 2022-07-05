@@ -29,6 +29,8 @@
 #define SPI_PORT spi1
 
 #define UPDATE 0
+#define TRIG_UP 3
+#define TRIG_DOWN 5
 
 // ============================================================================
 // global variables
@@ -47,13 +49,27 @@ bool DEBUG = true;
 
 // clang-format off
 #define INS_SIZE 22
-uint8_t instructions[] = {
-    // 0 => 100
+uint8_t test[] = {
+    // 100 => 50
     0x06, 0x00, 0x02, 0x00,
+    0x07, 0x01, 0x01,
+    0x08, 0xff, 0xc0, 0x00, 0x00,
+    0x09, 0x00, 0x40, 0x00, 0x00,
+    0x0a, 0xff, 0xc0, 0x00, 0x00,
+
+    // 50 => 0
+    0x06, 0x00, 0x00, 0x00,
+    0x07, 0x01, 0x01,
+    0x08, 0xff, 0xc0, 0x00, 0x00,
+    0x09, 0x00, 0x40, 0x00, 0x00,
+    0x0a, 0x80, 0x00, 0x00, 0x00,
+
+    // 0 => 50
+    0x06, 0x00, 0x00, 0x00,
     0x07, 0x01, 0x01,
     0x08, 0x00, 0x40, 0x00, 0x00,
     0x09, 0x00, 0x40, 0x00, 0x00,
-    0x0a, 0xff, 0xc0, 0x00, 0x00,
+    0x0a, 0x80, 0x00, 0x00, 0x00,
 
     // 50 => 100
     0x06, 0x00, 0x02, 0x00,
@@ -144,21 +160,26 @@ void background() {
     // wait for the batsignal
     multicore_fifo_pop_blocking();
 
-    return;
 
-    ad9959_config_amp_sweep(&ad9959, 0, false);
+    ad9959_config_amp_sweep(&ad9959, 3, false);
     ad9959_send_config(&ad9959);
-
-    spi_write_blocking(ad9959.spi, instructions, INS_SIZE);
     update();
 
-    pio_sm_put(trig.pio, trig.sm, 1);
+
+    spi_write_blocking(ad9959.spi, instructions, INS_SIZE);
+    pio_sm_put(trig.pio, trig.sm, TRIG_DOWN);
     wait(0);
-    pio_sm_put(trig.pio, trig.sm, 2);
+
+    spi_write_blocking(ad9959.spi, instructions + (1 * INS_SIZE), INS_SIZE);
+    pio_sm_put(trig.pio, trig.sm, TRIG_DOWN);
     wait(0);
-    pio_sm_put(trig.pio, trig.sm, 1);
+
+    spi_write_blocking(ad9959.spi, instructions + (2 * INS_SIZE), INS_SIZE);
+    pio_sm_put(trig.pio, trig.sm, TRIG_UP);
     wait(0);
-    pio_sm_put(trig.pio, trig.sm, 2);
+
+    spi_write_blocking(ad9959.spi, instructions + (3 * INS_SIZE), INS_SIZE);
+    pio_sm_put(trig.pio, trig.sm, TRIG_UP);
     wait(0);
 
     printf("fin\n");
@@ -246,7 +267,7 @@ int main() {
 
     // init SPI
     spi_init(SPI_PORT, 100 * MHZ);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    spi_set_format(SPI_PORT, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
@@ -259,7 +280,7 @@ int main() {
     trig.pio = pio0;
     trig.sm = pio_claim_unused_sm(pio0, true);
     trig.offset = pio_add_program(pio0, &trigger_program);
-    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P0, PIN_UPDATE);
+    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P3, PIN_UPDATE);
 
     // init the trigger pin
     init_pin(TRIGGER);

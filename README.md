@@ -7,6 +7,8 @@ $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the freq
 
 Timing uncertainty of $\sim 70$
 
+Always starts a table at 0 amp/freq/whatever I think
+
 
 ## Usage
 Note: Commands must be terminated with `\n`.

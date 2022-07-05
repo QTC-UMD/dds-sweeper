@@ -11,9 +11,12 @@ update:
     jmp start           side 1 [7]            
 
 trigger:
-    wait 1 pin 0        
-    out pins, 1         side 1
-    push                side 1 [7]
+    wait 1 pin 0
+    out pins, 1         side 1 [7]
+    nop                 side 0 [7]
+    out pins, 1         
+    push                
+ 
 
 
 
