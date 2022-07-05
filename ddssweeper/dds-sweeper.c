@@ -59,7 +59,7 @@ char readstring[256];
 bool DEBUG = true;
 
 // clang-format off
-#define INS_SIZE 22
+#define INS_SIZE 23
 uint8_t instructions[INS_SIZE * 1000];
 // clang-format on
 
@@ -96,17 +96,19 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
 
     if (s0 > e0) {
         // sweep down
-        memcpy(ins,
+        ins[0] = TRIG_DOWN;
+        memcpy(ins + 1,
                "\x06\x00\x00\x00\x07\x01\x01\x08\xff\xc0\x00\x00\x09\x00\x40"
                "\x00\x00\x0a\x80\x00\x00\x00",
-               INS_SIZE);
+               INS_SIZE - 1);
 
     } else {
         // sweep up
-        memcpy(ins,
+        ins[0] = TRIG_UP;
+        memcpy(ins + 1,
                "\x06\x00\x02\x00\x07\x01\x01\x08\x00\x40\x00\x00\x09\x00\x00"
                "\x00\x00\x0a\xff\xc0\x00\x00",
-               INS_SIZE);
+               INS_SIZE - 1);
     }
 
     memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
@@ -188,15 +190,16 @@ void background() {
         int i = 0;
 
         while (true) {
+            uint offset = INS_SIZE * (i++);
+
             // If an instruction is empty that means to stop
-            if (instructions[INS_SIZE * i] == 0x00) {
+            if (instructions[offset] == 0x00) {
                 set_status(ABORTED);
                 break;
             }
 
-            spi_write_blocking(ad9959.spi, instructions + (INS_SIZE * (i++)),
-                               INS_SIZE);
-            pio_sm_put(trig.pio, trig.sm, TRIG_UP);
+            spi_write_blocking(ad9959.spi, instructions + offset + 1, INS_SIZE);
+            pio_sm_put(trig.pio, trig.sm, instructions[offset]);
             // printf("Waiting...\n");
             wait(0);
         }
