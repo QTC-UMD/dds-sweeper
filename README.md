@@ -31,10 +31,16 @@ Turns on extra debug messages printed over serial. `state` should be `on` or `of
 * `setfreq <channel:int> <frequency:float>`:
 
 
-* ``:
+* `configtable <type:int> <no dwell:int>`:
+0: single tone
+1: amp
+2: freq
+3: phase
+
+make sure the sweep type is set before you start adding structions
 
 
-* ``:
+* `set <channel:int> <addr:int> <start_point:double> <end_point:double> <rate:double>`:
 
 
 * ``:

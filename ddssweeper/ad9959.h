@@ -2,14 +2,14 @@
 #ifndef _AD9959_H
 #define _AD9959_H
 
-#include <string.h>
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
+#include <string.h>
 
-#include "pico/stdlib.h"
-#include "hardware/spi.h"
 #include "hardware/clocks.h"
+#include "hardware/spi.h"
 #include "hardware/structs/watchdog.h"
+#include "pico/stdlib.h"
 
 typedef struct ad9959_config {
     uint8_t csr[2];
@@ -25,15 +25,19 @@ typedef struct ad9959_config {
     spi_inst_t* spi;
     uint32_t sys_clk;
     uint32_t pll_mult;
+    uint sweep_type;
 } ad9959_config;
 
 ad9959_config ad9959_get_default_config();
 
 void ad9959_config_spi(ad9959_config* c, spi_inst_t* spi);
 void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell);
+
+void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell);
+
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val);
 void ad9959_config_sys_clk(ad9959_config* c, uint32_t val);
-uint32_t ad9959_config_freq(ad9959_config* c, uint channel,  double freq);
+uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq);
 
 void ad9959_send_config(ad9959_config* c);
 

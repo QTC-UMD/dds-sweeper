@@ -28,6 +28,21 @@
 // SPI config
 #define SPI_PORT spi1
 
+// Mutex for status
+static mutex_t status_mutex;
+static mutex_t wait_mutex;
+
+// STATUS flag
+int status;
+#define STOPPED 0
+#define TRANSITION_TO_RUNNING 1
+#define RUNNING 2
+#define ABORT_REQUESTED 3
+#define ABORTING 4
+#define ABORTED 5
+#define TRANSITION_TO_STOP 6
+
+// PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 #define TRIG_UP 3
 #define TRIG_DOWN 5
@@ -49,36 +64,7 @@ bool DEBUG = true;
 
 // clang-format off
 #define INS_SIZE 22
-uint8_t test[] = {
-    // 100 => 50
-    0x06, 0x00, 0x02, 0x00,
-    0x07, 0x01, 0x01,
-    0x08, 0xff, 0xc0, 0x00, 0x00,
-    0x09, 0x00, 0x40, 0x00, 0x00,
-    0x0a, 0xff, 0xc0, 0x00, 0x00,
-
-    // 50 => 0
-    0x06, 0x00, 0x00, 0x00,
-    0x07, 0x01, 0x01,
-    0x08, 0xff, 0xc0, 0x00, 0x00,
-    0x09, 0x00, 0x40, 0x00, 0x00,
-    0x0a, 0x80, 0x00, 0x00, 0x00,
-
-    // 0 => 50
-    0x06, 0x00, 0x00, 0x00,
-    0x07, 0x01, 0x01,
-    0x08, 0x00, 0x40, 0x00, 0x00,
-    0x09, 0x00, 0x40, 0x00, 0x00,
-    0x0a, 0x80, 0x00, 0x00, 0x00,
-
-    // 50 => 100
-    0x06, 0x00, 0x02, 0x00,
-    0x07, 0x01, 0x01,
-    0x08, 0x00, 0x40, 0x00, 0x00,
-    0x09, 0x00, 0x40, 0x00, 0x00,
-    0x0a, 0xff, 0xc0, 0x00, 0x00,
-
-};
+uint8_t instructions[INS_SIZE * 1000];
 // clang-format on
 
 // ============================================================================
@@ -107,6 +93,41 @@ void init_pin(uint pin) {
     gpio_init(pin);
     gpio_set_dir(pin, GPIO_OUT);
     gpio_put(pin, 0);
+}
+
+void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
+    uint8_t ins[INS_SIZE];
+
+    if (s0 > e0) {
+        // sweep down
+        memcpy(ins,
+               "\x06\x00\x00\x00\x07\x01\x01\x08\xff\xc0\x00\x00\x09\x00\x40"
+               "\x00\x00\x0a\x80\x00\x00\x00",
+               INS_SIZE);
+
+    } else {
+        // sweep up
+        memcpy(ins,
+               "\x06\x00\x02\x00\x07\x01\x01\x08\x00\x40\x00\x00\x09\x00\x00"
+               "\x00\x00\x0a\xff\xc0\x00\x00",
+               INS_SIZE);
+    }
+
+    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+}
+
+// Thread safe functions for getting/setting status
+int get_status() {
+    mutex_enter_blocking(&status_mutex);
+    int status_copy = status;
+    mutex_exit(&status_mutex);
+    return status_copy;
+}
+
+void set_status(int new_status) {
+    mutex_enter_blocking(&status_mutex);
+    status = new_status;
+    mutex_exit(&status_mutex);
 }
 
 void measure_freqs(void) {
@@ -157,33 +178,27 @@ void background() {
     // let other core know we ready
     multicore_fifo_push_blocking(0);
 
+    printf("wat\n");
+
     // wait for the batsignal
     multicore_fifo_pop_blocking();
 
+    printf("Starting\n");
 
-    ad9959_config_amp_sweep(&ad9959, 3, false);
     ad9959_send_config(&ad9959);
     update();
 
+    // make sure this will not overflow with real big numbers of instructions
+    // that would be pretty silly though
+    int i = 0;
 
-    spi_write_blocking(ad9959.spi, test, INS_SIZE);
-    pio_sm_put(trig.pio, trig.sm, TRIG_DOWN);
-    wait(0);
-
-    spi_write_blocking(ad9959.spi, test + (1 * INS_SIZE), INS_SIZE);
-    pio_sm_put(trig.pio, trig.sm, TRIG_DOWN);
-    wait(0);
-
-    spi_write_blocking(ad9959.spi, test + (2 * INS_SIZE), INS_SIZE);
-    pio_sm_put(trig.pio, trig.sm, TRIG_UP);
-    wait(0);
-
-    spi_write_blocking(ad9959.spi, test + (3 * INS_SIZE), INS_SIZE);
-    pio_sm_put(trig.pio, trig.sm, TRIG_UP);
-    wait(0);
-
-    printf("fin\n");
-
+    while (true) {
+        spi_write_blocking(ad9959.spi, instructions + (INS_SIZE * (i++)),
+                           INS_SIZE);
+        pio_sm_put(trig.pio, trig.sm, TRIG_UP);
+        // printf("Waiting...\n");
+        wait(0);
+    }
 }
 
 void readline() {
@@ -202,6 +217,7 @@ void readline() {
 
 void loop() {
     readline();
+    int local_status = get_status();
 
     if (DEBUG) printf("%s\n", readstring);
 
@@ -218,10 +234,22 @@ void loop() {
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
         printf("ok\n");
+    }
+    // ====================================================
+    // Stuff that cannot be done while the table is running
+    // ====================================================
+    else if (local_status != ABORTED && local_status != STOPPED) {
+        printf(
+            "Cannot execute command \"%s\" during buffered execution. Check "
+            "status first and wait for it to return 0 or 5 (stopped or "
+            "aborted).\n",
+            readstring);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         ad9959_read_all(&ad9959);
         printf("ok\n");
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
+        // setfreq <channel:int> <frequency:float>
+
         uint channel;
         double freq;
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
@@ -243,8 +271,57 @@ void loop() {
 
             printf("ok\n");
         }
+    } else if (strncmp(readstring, "config", 6) == 0) {
+        // configtable <type:int> <no dwell:int>
+
+        uint type, no_dwell;
+        int parsed = sscanf(readstring, "%*s %u %u", &type, &no_dwell);
+
+        if (parsed < 2) {
+            printf(
+                "Invalid Command - too few arguments - expected: configtable "
+                "<type:int> <no dwell:int>\n");
+        } else if (type > 3) {
+            printf("Invalid Command - table type must be in range 0-3\n");
+        } else if (type != 0 && no_dwell > 1) {
+            printf(
+                "Invalid Command - no dwell must be in range 0-1 if not in "
+                "single tone mode\n");
+        } else {
+            ad9959_config_table(&ad9959, type, no_dwell);
+            printf("OK\n");
+        }
+
+    } else if (strncmp(readstring, "set", 3) == 0) {
+        // set <channel:int> <addr:int> <start_point:double> <end_point:double>
+        // <rate:double>
+
+        uint channel, addr;
+        double s0, e0, rr;
+        int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf", &channel,
+                            &addr, &s0, &e0, &rr);
+
+        if (parsed < 5) {
+            printf(
+                "Invalid Command - too few arguments - expected: set "
+                "<channel:int> <addr:int> <start_point:double> "
+                "<end_point:double> <rate:double>\n");
+
+            // TODO:
+            // lots more validation
+            // make sure to check what sweep type the table is configured for
+        } else {
+            set_ins(channel, addr, s0, e0, rr);
+
+            printf("OK\n");
+        }
+
+    } else if (strncmp(readstring, "start", 5) == 0) {
+        multicore_fifo_push_blocking(0);
+
+        printf("OK\n");
     } else {
-        printf("Unrecognized command: %s\n", readstring);
+        printf("Unrecognized command: \"%s\"\n", readstring);
     }
 }
 
@@ -276,6 +353,10 @@ int main() {
     multicore_launch_core1(background);
     multicore_fifo_pop_blocking();
 
+    // initialise the status mutex
+    mutex_init(&status_mutex);
+    mutex_init(&wait_mutex);
+
     // init the trigger
     trig.pio = pio0;
     trig.sm = pio_claim_unused_sm(pio0, true);
@@ -298,8 +379,7 @@ int main() {
     stdio_init_all();
     stdio_init_all();
 
-    // let the other guy loose
-    multicore_fifo_push_blocking(0);
+    printf("\n==================================\n");
 
     while (true) {
         loop();
