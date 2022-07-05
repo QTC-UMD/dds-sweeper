@@ -59,8 +59,8 @@ char readstring[256];
 bool DEBUG = true;
 
 // clang-format off
-#define INS_SIZE 23
-uint8_t instructions[INS_SIZE * 1000];
+uint INS_SIZE = 23;
+uint8_t instructions[20000];
 // clang-format on
 
 // ============================================================================
@@ -92,24 +92,82 @@ void init_pin(uint pin) {
 }
 
 void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
-    uint8_t ins[INS_SIZE];
+    uint8_t ins[30];
 
-    if (s0 > e0) {
-        // sweep down
-        ins[0] = TRIG_DOWN;
-        memcpy(ins + 1,
-               "\x06\x00\x00\x00\x07\x01\x01\x08\xff\xc0\x00\x00\x09\x00\x40"
-               "\x00\x00\x0a\x80\x00\x00\x00",
-               INS_SIZE - 1);
+    if (ad9959.sweep_type == 0) {
+        // Single Tone
 
-    } else {
-        // sweep up
-        ins[0] = TRIG_UP;
-        memcpy(ins + 1,
-               "\x06\x00\x02\x00\x07\x01\x01\x08\x00\x40\x00\x00\x09\x00\x00"
-               "\x00\x00\x0a\xff\xc0\x00\x00",
-               INS_SIZE - 1);
+    } else if (ad9959.sweep_type == 1) {
+        // validation specific to each type of sweep
+        if (s0 < 0) s0 = 0;
+        if (s0 > 1) s0 = 1;
+
+        if (e0 < 0) e0 = 0;
+        if (e0 > 1) e0 = 1;
+
+        s0 *= round(1023);
+        e0 *= round(1023);
+
+        printf("s0: %lf e0: %lf\n", s0, e0);
+
+        // Amp Sweep
+        if (s0 > e0) {
+            // sweep down
+
+            ins[0] = TRIG_DOWN;
+            // memcpy(
+            //     ins + 1,
+            //     "\x06\x00\x00\x00\x07\x01\x01\x08\xff\xc0\x00\x00\x09\x00\x40"
+            //     "\x00\x00\x0a\x80\x00\x00\x00",
+            //     INS_SIZE - 1);
+
+            ins[1] = 0x06;
+            memcpy(ins + 2, (uint8_t*) ((uint32_t) e0), 3);
+
+            memcpy(ins + 5, "\x07\x01\x01", 3);
+
+            // for down sweeps we do a super fast up sweep
+            memcpy(ins + 8, "\x08\xff\xc0\x00\x00", 5);
+
+            // for no hardcoded
+            memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
+
+            ins[17] = 0x0a;
+            memcpy(ins + 18, (uint8_t*) (((uint32_t) s0) << 22), 4);
+
+        } else {
+            // sweep up
+            ins[0] = TRIG_UP;
+            // memcpy(
+            //     ins + 1,
+            //     "\x06\x00\x02\x00\x07\x01\x01\x08\x00\x40\x00\x00\x09\x00\x00"
+            //     "\x00\x00\x0a\xff\xc0\x00\x00",
+            //     INS_SIZE - 1);
+            ins[1] = 0x06;
+            memcpy(ins + 2, (uint8_t*) ((uint32_t) s0), 3);
+
+            memcpy(ins + 5, "\x07\x01\x01", 3);
+
+            // for now hardcoded
+            memcpy(ins + 8, "\x08\x00\x40\x00\x00", 5);
+
+            // this value is never used
+            memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
+
+            ins[17] = 0x0a;
+            printf("here\n");
+            memcpy(ins + 18, (uint8_t*) (((uint32_t) e0 )<< 22), 4);
+        }
+    } else if (ad9959.sweep_type == 2) {
+        // freq Sweep
+    } else if (ad9959.sweep_type == 3) {
+        // phase Sweep
     }
+
+    for (int i = 0; i < INS_SIZE; i++) {
+        printf("%02x ", ins[i]);
+    }
+    printf("\n");
 
     memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
 }
@@ -198,9 +256,9 @@ void background() {
                 break;
             }
 
-            spi_write_blocking(ad9959.spi, instructions + offset + 1, INS_SIZE - 1);
+            spi_write_blocking(ad9959.spi, instructions + offset + 1,
+                               INS_SIZE - 1);
             pio_sm_put(trig.pio, trig.sm, instructions[offset]);
-            // printf("Waiting...\n");
             wait(0);
         }
     }
