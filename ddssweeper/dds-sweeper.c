@@ -14,19 +14,16 @@
 #include "tusb.h"
 
 // Default Pins to use
-uint PIN_MISO = 12;
-uint PIN_MOSI = 15;
-uint PIN_SCK = 14;
-uint PIN_RESET = 20;
-uint PIN_UPDATE = 22;
-uint P0 = 16;
-uint P1 = 17;
-uint P2 = 18;
-uint P3 = 19;
-uint TRIGGER = 8;
-
-// SPI config
-spi_inst_t* SPI_PORT = spi1;
+#define PIN_MISO 12
+#define PIN_MOSI 15
+#define PIN_SCK 14
+#define PIN_RESET 20
+#define PIN_UPDATE 22
+#define P0 16
+#define P1 17
+#define P2 18
+#define P3 19
+#define TRIGGER 8
 
 // Mutex for status
 static mutex_t status_mutex;
@@ -58,30 +55,19 @@ char readstring[256];
 #define VERSION "0.0.0"
 bool DEBUG = true;
 
-// clang-format off
-uint INS_SIZE = 23;
+uint triggers;
+
+uint INS_SIZE = 0;
 uint8_t instructions[20000];
-// clang-format on
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
-void ad9959_reset() {
-    sleep_us(1);
-    gpio_put(PIN_RESET, 1);
-    sleep_us(1);
-    gpio_put(PIN_RESET, 0);
-    sleep_us(1);
-}
 
-void trigger(uint channel, uint val) {
-    pio_sm_put(trig.pio, trig.sm, val);
-    gpio_put(TRIGGER, 1);
-    // sleep_us(1);
-    gpio_put(TRIGGER, 0);
+void wait(uint channel) {
+    pio_sm_get_blocking(trig.pio, trig.sm);
+    triggers++;
 }
-
-void wait(uint channel) { pio_sm_get_blocking(trig.pio, trig.sm); }
 
 void update() { pio_sm_put(trig.pio, trig.sm, 0); }
 
@@ -91,10 +77,11 @@ void init_pin(uint pin) {
     gpio_put(pin, 0);
 }
 
-void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
+void set_ins(uint channel, uint addr, double s0, double e0, double time) {
     uint8_t ins[30];
+    uint32_t higher, lower;
 
-    if (rr == 0) {
+    if (time == 0) {
         // if the ramp rate is zero, assume that means the end of forever
         memset(ins, 0, sizeof(ins));
     } else if (ad9959.sweep_type == 0) {
@@ -103,6 +90,7 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
     } else if (ad9959.sweep_type == 1) {
         // AMP SWEEP
 
+        // verify the time
         if (s0 < 0) s0 = 0;
         if (s0 > 1) s0 = 1;
 
@@ -112,44 +100,112 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
         s0 = round(s0 * 1023);
         e0 = round(e0 * 1023);
 
-        uint32_t higher, lower;
+        uint srr = 1;
+        double cycles, word;
+        while (srr <= 0xff) {
+            cycles = time * ad9959.sys_clk / 4.0 / srr;
+            word = abs(e0 - s0) / cycles;
+
+            if (word < 1) {
+                srr++;
+            } else {
+                break;
+            }
+        }
+        if (word < 1) word = 1;
+        uint32_t x = round(word);
+        x = ((x & 0x3fc) >> 2) | ((x & 0x3) << 14);
+
         if (s0 > e0) {
             // sweep down
             lower = (uint32_t)e0;
             higher = (uint32_t)s0;
-
             ins[0] = TRIG_DOWN;
+            memcpy(ins + 9, "\xff\xc0\x00\x00", 4);
+            memcpy(ins + 14, (uint8_t*)&x, 4);
 
-            // purposefully big
-            memcpy(ins + 8, "\x08\xff\xc0\x00\x00", 5);
-            memcpy(ins + 5, "\x07\x04\x01", 3);
-
-            memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
+            ins[6] = 0x01;
+            ins[7] = 0x01;
 
         } else {
             // sweep up
-
             lower = (uint32_t)s0;
             higher = (uint32_t)e0;
-
             ins[0] = TRIG_UP;
+            memcpy(ins + 9, (uint8_t*)&x, 4);
+            memcpy(ins + 14, "\xff\xc0\x00\x00", 4);
 
-            memcpy(ins + 13, "\x09\xff\xc0\x00\x00", 5);
-            memcpy(ins + 8, "\x08\x00\x40\x00\x00", 5);
-
-            memcpy(ins + 5, "\x07\x04\x04", 3);
+            ins[6] = 0x01;
+            ins[7] = srr;
         }
-
-        ins[1] = 0x06;
-        ins[18] = 0x0a;
 
         lower = ((lower & 0xff) << 16) | (lower & 0xff00);
         higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
         memcpy(ins + 2, (uint8_t*)&lower, 3);
         memcpy(ins + 19, (uint8_t*)&higher, 4);
 
+        ins[1] = 0x06;
+        ins[5] = 0x07;
+        ins[8] = 0x08;
+        ins[13] = 0x09;
+        ins[18] = 0x0a;
+
     } else if (ad9959.sweep_type == 2) {
         // freq Sweep
+        uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
+        uint32_t eword = round(e0 / ad9959.sys_clk * 4294967296.0);
+
+        uint srr = 1;
+        double cycles, word;
+        while (srr <= 0xff) {
+            cycles = time * ad9959.sys_clk / 4.0 / srr;
+            word = abs(eword - sword) / cycles;
+
+            if (word < 1) {
+                srr++;
+            } else {
+                break;
+            }
+        }
+        if (word < 1) word = 1;
+        uint32_t rword = round(word);
+
+        sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
+                ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
+        eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
+                ((eword & 0xff0000) >> 8) | ((eword & 0xff000000) >> 24);
+        rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
+                ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
+
+        if (s0 < e0) {
+            // sweep up
+            ins[0] = TRIG_UP;
+            lower = sword;
+            higher = eword;
+            memcpy(ins + 10, (uint8_t*)&rword, 4);
+            memcpy(ins + 15, "\x00\x00\x00\x00", 4);
+            ins[7] = srr;
+            ins[8] = srr;
+        } else {
+            // sweep down
+            ins[0] = TRIG_DOWN;
+            lower = sword;
+            higher = eword;
+            memcpy(ins + 10, "\xff\xff\xff\xff", 4);
+            memcpy(ins + 15, (uint8_t*)&rword, 4);
+            ins[7] = srr;
+            ins[8] = srr;
+        }
+
+        ins[1] = 0x04;
+        ins[6] = 0x07;
+        ins[9] = 0x08;
+        ins[14] = 0x09;
+        ins[19] = 0x0a;
+
+        memcpy(ins + 2, (uint8_t*)&lower, 4);
+        memcpy(ins + 20, (uint8_t*)&higher, 4);
+
     } else if (ad9959.sweep_type == 3) {
         // phase Sweep
     }
@@ -202,6 +258,8 @@ void measure_freqs(void) {
 }
 
 void resus_callback(void) {
+    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
+    // License
     // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
     pll_init(pll_sys, 1, 1500 * MHZ, 6, 2);
 
@@ -209,9 +267,6 @@ void resus_callback(void) {
     clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
                     CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
-
-    // kill external clock pins
-    gpio_set_function(2, GPIO_FUNC_NULL);
 
     // Reconfigure IO
     stdio_init_all();
@@ -232,6 +287,7 @@ void background() {
         ad9959_send_config(&ad9959);
         update();
 
+        triggers = 0;
         set_status(RUNNING);
 
         // make sure this will not overflow with real big numbers of
@@ -250,6 +306,7 @@ void background() {
             spi_write_blocking(ad9959.spi, instructions + offset + 1,
                                INS_SIZE - 1);
             pio_sm_put(trig.pio, trig.sm, instructions[offset]);
+
             wait(0);
         }
     }
@@ -288,6 +345,9 @@ void loop() {
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
         printf("ok\n");
+    } else if (strncmp(readstring, "numtriggers", 11) == 0) {
+        printf("%u triggers recieved in last run\n", triggers);
+        printf("ok\n");
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
@@ -298,9 +358,9 @@ void loop() {
             "status first and wait for it to return 0 or 5 (stopped or "
             "aborted).\n",
             readstring);
-    } else if (strncmp(readstring, "readregs", 8) == 0) {
-        ad9959_read_all(&ad9959);
-        printf("ok\n");
+        // } else if (strncmp(readstring, "readregs", 8) == 0) {
+        //     ad9959_read_all(&ad9959);
+        //     printf("ok\n");
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
         // setfreq <channel:int> <frequency:float>
 
@@ -342,6 +402,8 @@ void loop() {
                 "Invalid Command - no dwell must be in range 0-1 if not in "
                 "single tone mode\n");
         } else {
+            uint8_t sizes[] = {0, 23, 24, 0};
+            INS_SIZE = sizes[type];
             ad9959_config_table(&ad9959, type, no_dwell);
             printf("OK\n");
         }
@@ -351,9 +413,9 @@ void loop() {
         // <rate:double>
 
         uint channel, addr;
-        double s0, e0, rr;
+        double s0, e0, time;
         int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf", &channel,
-                            &addr, &s0, &e0, &rr);
+                            &addr, &s0, &e0, &time);
 
         if (parsed < 5) {
             printf(
@@ -365,7 +427,7 @@ void loop() {
             // lots more validation
             // make sure to check what sweep type the table is configured for
         } else {
-            set_ins(channel, addr, s0, e0, rr);
+            set_ins(channel, addr, s0, e0, time);
 
             printf("OK\n");
         }
@@ -401,8 +463,8 @@ int main() {
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
     // init SPI
-    spi_init(SPI_PORT, 100 * MHZ);
-    spi_set_format(SPI_PORT, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_init(spi1, 100 * MHZ);
+    spi_set_format(spi1, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
@@ -423,10 +485,12 @@ int main() {
 
     // put chip in a known state
     init_pin(PIN_RESET);
-    ad9959_reset();
+    gpio_put(PIN_RESET, 1);
+    sleep_ms(1);
+    gpio_put(PIN_RESET, 0);
+    sleep_ms(1);
 
     ad9959 = ad9959_get_default_config();
-    ad9959_config_spi(&ad9959, SPI_PORT);
     ad9959_send_config(&ad9959);
 
     update();

@@ -21,21 +21,9 @@ ad9959_config ad9959_get_default_config() {
     c.sys_clk = 125 * MHZ * 4;
     c.pll_mult = 4;
     c.sweep_type = 0;
+    c.spi = spi1;
 
     return c;
-}
-
-void ad9959_config_spi(ad9959_config* c, spi_inst_t* spi) { c->spi = spi; }
-
-void ad9959_config_amp_sweep(ad9959_config* c, uint channel, bool no_dwell) {
-    // c->cfr[channel][1] &= 0x03;
-    // c->cfr[channel][2] &= 0x0b;
-    // c->cfr[channel][1] |= 0x40;
-    // c->cfr[channel][2] |= 0x40 | (no_dwell << 7);
-
-    c->cfr[channel][1] = 0x40;
-    c->cfr[channel][2] = 0x43;
-    c->cfr[channel][3] = 0x10;
 }
 
 void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell) {
@@ -98,6 +86,8 @@ void ad9959_send_config(ad9959_config* c) {
     spi_write_blocking(c->spi, c->csr, 2);
 }
 
+#if 0
+// could be helpful for debugging
 static void read(ad9959_config* c, uint8_t reg, size_t len, uint8_t* buf) {
     reg |= 0x80;
     spi_write_blocking(c->spi, &reg, 1);
@@ -146,3 +136,4 @@ void ad9959_read_all(ad9959_config* c) {
 
     }
 }
+#endif

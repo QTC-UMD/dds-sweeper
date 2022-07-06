@@ -17,8 +17,6 @@ trigger:
     push                
  
 
-
-
 % c-sdk {
 
     static inline void trigger_program_init(PIO pio, uint sm, uint offset, 
