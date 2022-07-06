@@ -150,6 +150,12 @@ void set_ins(uint channel, uint addr, double s0, double e0, double time) {
         ins[13] = 0x09;
         ins[18] = 0x0a;
 
+        printf("RR: %u\n", srr);
+        for (int i = 0; i < INS_SIZE; i++) {
+            printf("%02x ", ins[i]);
+        }
+        printf("\n");
+
     } else if (ad9959.sweep_type == 2) {
         // freq Sweep
         uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
