@@ -112,9 +112,6 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
         s0 = round(s0 * 1023);
         e0 = round(e0 * 1023);
 
-
-
-
         uint32_t higher, lower;
         if (s0 > e0) {
             // sweep down
@@ -125,7 +122,7 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
 
             // purposefully big
             memcpy(ins + 8, "\x08\xff\xc0\x00\x00", 5);
-
+            memcpy(ins + 5, "\x07\x02\x01", 3);
 
             memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
 
@@ -138,15 +135,13 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
             ins[0] = TRIG_UP;
 
             memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
-            memcpy(ins + 8,  "\x08\x00\x40\x00\x00", 5);
+            memcpy(ins + 8, "\x08\x00\x40\x00\x00", 5);
+
+            memcpy(ins + 5, "\x07\x04\x04", 3);
         }
 
         ins[1] = 0x06;
         ins[18] = 0x0a;
-
-        // for now hardcoded
-        memcpy(ins + 5, "\x07\x01\x01", 3);
-
 
         lower = ((lower & 0xff) << 16) | (lower & 0xff00);
         higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
