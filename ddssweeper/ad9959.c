@@ -45,7 +45,7 @@ void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell) {
 
     for (int i = 0; i < 4; i++) {
         c->cfr[i][1] = (type << 6);
-        c->cfr[i][2] = (no_dwell << 7) | ((type ? 1 : 0 )<< 6) | 0b11;
+        c->cfr[i][2] = (no_dwell << 7) | ((type ? 1 : 0 )<< 6) | 0b100011;
         c->cfr[i][3] = 0b00010000;
     }
 }

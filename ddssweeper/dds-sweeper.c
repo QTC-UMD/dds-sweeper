@@ -122,7 +122,7 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
 
             // purposefully big
             memcpy(ins + 8, "\x08\xff\xc0\x00\x00", 5);
-            memcpy(ins + 5, "\x07\x02\x01", 3);
+            memcpy(ins + 5, "\x07\x04\x01", 3);
 
             memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
 
@@ -134,7 +134,7 @@ void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
 
             ins[0] = TRIG_UP;
 
-            memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
+            memcpy(ins + 13, "\x09\xff\xc0\x00\x00", 5);
             memcpy(ins + 8, "\x08\x00\x40\x00\x00", 5);
 
             memcpy(ins + 5, "\x07\x04\x04", 3);
