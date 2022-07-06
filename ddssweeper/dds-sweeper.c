@@ -94,80 +94,76 @@ void init_pin(uint pin) {
 void set_ins(uint channel, uint addr, double s0, double e0, double rr) {
     uint8_t ins[30];
 
-    if (ad9959.sweep_type == 0) {
+    if (rr == 0) {
+        // if the ramp rate is zero, assume that means the end of forever
+        memset(ins, 0, sizeof(ins));
+    } else if (ad9959.sweep_type == 0) {
         // Single Tone
 
     } else if (ad9959.sweep_type == 1) {
-        // validation specific to each type of sweep
+        // AMP SWEEP
+
         if (s0 < 0) s0 = 0;
         if (s0 > 1) s0 = 1;
 
         if (e0 < 0) e0 = 0;
         if (e0 > 1) e0 = 1;
 
-        s0 *= round(1023);
-        e0 *= round(1023);
+        s0 = round(s0 * 1023);
+        e0 = round(e0 * 1023);
 
-        printf("s0: %lf e0: %lf\n", s0, e0);
 
-        // Amp Sweep
+
+
+        uint32_t higher, lower;
         if (s0 > e0) {
             // sweep down
+            lower = (uint32_t)e0;
+            higher = (uint32_t)s0;
 
             ins[0] = TRIG_DOWN;
-            // memcpy(
-            //     ins + 1,
-            //     "\x06\x00\x00\x00\x07\x01\x01\x08\xff\xc0\x00\x00\x09\x00\x40"
-            //     "\x00\x00\x0a\x80\x00\x00\x00",
-            //     INS_SIZE - 1);
 
-            ins[1] = 0x06;
-            memcpy(ins + 2, (uint8_t*) ((uint32_t) e0), 3);
-
-            memcpy(ins + 5, "\x07\x01\x01", 3);
-
-            // for down sweeps we do a super fast up sweep
+            // purposefully big
             memcpy(ins + 8, "\x08\xff\xc0\x00\x00", 5);
 
-            // for no hardcoded
-            memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
 
-            ins[17] = 0x0a;
-            memcpy(ins + 18, (uint8_t*) (((uint32_t) s0) << 22), 4);
+            memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
 
         } else {
             // sweep up
+
+            lower = (uint32_t)s0;
+            higher = (uint32_t)e0;
+
             ins[0] = TRIG_UP;
-            // memcpy(
-            //     ins + 1,
-            //     "\x06\x00\x02\x00\x07\x01\x01\x08\x00\x40\x00\x00\x09\x00\x00"
-            //     "\x00\x00\x0a\xff\xc0\x00\x00",
-            //     INS_SIZE - 1);
-            ins[1] = 0x06;
-            memcpy(ins + 2, (uint8_t*) ((uint32_t) s0), 3);
 
-            memcpy(ins + 5, "\x07\x01\x01", 3);
-
-            // for now hardcoded
-            memcpy(ins + 8, "\x08\x00\x40\x00\x00", 5);
-
-            // this value is never used
             memcpy(ins + 13, "\x09\x00\x40\x00\x00", 5);
-
-            ins[17] = 0x0a;
-            printf("here\n");
-            memcpy(ins + 18, (uint8_t*) (((uint32_t) e0 )<< 22), 4);
+            memcpy(ins + 8,  "\x08\x00\x40\x00\x00", 5);
         }
+
+        ins[1] = 0x06;
+        ins[18] = 0x0a;
+
+        // for now hardcoded
+        memcpy(ins + 5, "\x07\x01\x01", 3);
+
+
+        lower = ((lower & 0xff) << 16) | (lower & 0xff00);
+        higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
+        memcpy(ins + 2, (uint8_t*)&lower, 3);
+        memcpy(ins + 19, (uint8_t*)&higher, 4);
+
     } else if (ad9959.sweep_type == 2) {
         // freq Sweep
     } else if (ad9959.sweep_type == 3) {
         // phase Sweep
     }
 
-    for (int i = 0; i < INS_SIZE; i++) {
-        printf("%02x ", ins[i]);
-    }
-    printf("\n");
+    // printf("Instruction #%d: ", addr);
+    // for (int i = 0; i < INS_SIZE; i++) {
+    //     printf("%02x ", ins[i]);
+    // }
+    // printf("\n");
 
     memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
 }
