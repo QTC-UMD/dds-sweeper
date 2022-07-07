@@ -1,6 +1,4 @@
-#include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "ad9959.h"
@@ -11,7 +9,8 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger.pio.h"
-#include "tusb.h"
+
+#define VERSION "0.0.0"
 
 // Default Pins to use
 #define PIN_MISO 12
@@ -32,7 +31,7 @@ static mutex_t wait_mutex;
 // STATUS flag
 #define STOPPED 0
 #define RUNNING 1
-#define ABORTED 2
+#define ABORTING 2
 int status = STOPPED;
 
 // PIO VALUES IT IS LOOKING FOR
@@ -52,7 +51,6 @@ typedef struct pio_sm {
 pio_sm trig;
 ad9959_config ad9959;
 char readstring[256];
-#define VERSION "0.0.0"
 bool DEBUG = true;
 
 uint triggers;
@@ -70,6 +68,19 @@ void wait(uint channel) {
 }
 
 void update() { pio_sm_put(trig.pio, trig.sm, 0); }
+
+
+void reset() {
+    gpio_put(PIN_RESET, 1);
+    sleep_ms(1);
+    gpio_put(PIN_RESET, 0);
+    sleep_ms(1);
+
+    ad9959 = ad9959_get_default_config();
+    ad9959_send_config(&ad9959);
+
+    update();
+}
 
 void init_pin(uint pin) {
     gpio_init(pin);
@@ -160,6 +171,15 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
             ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
 
+    ins[1] = 0x04;
+    ins[6] = 0x07;
+    ins[7] = div;
+    ins[8] = div;
+    ins[9] = 0x08;
+    ins[14] = 0x09;
+    ins[19] = 0x0a;
+    ins[24] = 0x03;
+
     if (s0 <= e0) {
         // sweep up
         ins[0] = TRIG_UP;
@@ -167,27 +187,17 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
         higher = eword;
         memcpy(ins + 10, (uint8_t*)&rword, 4);
         memcpy(ins + 15, "\x00\x00\x00\x00", 4);
-        ins[7] = div;
-        ins[8] = div;
         memcpy(ins + 25, "\x80\x43\x10", 3);
     } else {
         // sweep down
         ins[0] = TRIG_DOWN;
+        ins[8] = 0x01;
         lower = eword;
         higher = sword;
         memcpy(ins + 10, "\xff\xff\xff\xff", 4);
         memcpy(ins + 15, (uint8_t*)&rword, 4);
-        ins[7] = div;
-        ins[8] = div;
         memcpy(ins + 25, "\x80\x43\x00", 3);
     }
-
-    ins[1] = 0x04;
-    ins[6] = 0x07;
-    ins[9] = 0x08;
-    ins[14] = 0x09;
-    ins[19] = 0x0a;
-    ins[24] = 0x03;
 
     memcpy(ins + 2, (uint8_t*)&lower, 4);
     memcpy(ins + 20, (uint8_t*)&higher, 4);
@@ -199,88 +209,6 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
         printf("%02x ", ins[i]);
     }
     printf("\n");
-}
-
-void set_ins(uint channel, uint addr, double s0, double e0, double time) {
-    uint8_t ins[30];
-    uint32_t higher, lower;
-
-    if (time == 0) {
-        // if the ramp rate is zero, assume that means the end of forever
-        memset(ins, 0, sizeof(ins));
-    } else if (ad9959.sweep_type == 0) {
-        // Single Tone
-
-    } else if (ad9959.sweep_type == 1) {
-        // AMP SWEEP
-
-    } else if (ad9959.sweep_type == 2) {
-        // freq Sweep
-        uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
-        uint32_t eword = round(e0 / ad9959.sys_clk * 4294967296.0);
-
-        uint srr = 1;
-        double cycles, word;
-        while (srr <= 0xff) {
-            cycles = time * ad9959.sys_clk / 4.0 / srr;
-            word = abs(eword - sword) / cycles;
-
-            if (word < 1) {
-                srr++;
-            } else {
-                break;
-            }
-        }
-        if (word < 1) word = 1;
-        uint32_t rword = round(word);
-
-        sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
-                ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
-        eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
-                ((eword & 0xff0000) >> 8) | ((eword & 0xff000000) >> 24);
-        rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
-                ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
-
-        if (s0 < e0) {
-            // sweep up
-            ins[0] = TRIG_UP;
-            lower = sword;
-            higher = eword;
-            memcpy(ins + 10, (uint8_t*)&rword, 4);
-            memcpy(ins + 15, "\x00\x00\x00\x00", 4);
-            ins[7] = srr;
-            ins[8] = srr;
-        } else {
-            // sweep down
-            ins[0] = TRIG_DOWN;
-            lower = sword;
-            higher = eword;
-            memcpy(ins + 10, "\xff\xff\xff\xff", 4);
-            memcpy(ins + 15, (uint8_t*)&rword, 4);
-            ins[7] = srr;
-            ins[8] = srr;
-        }
-
-        ins[1] = 0x04;
-        ins[6] = 0x07;
-        ins[9] = 0x08;
-        ins[14] = 0x09;
-        ins[19] = 0x0a;
-
-        memcpy(ins + 2, (uint8_t*)&lower, 4);
-        memcpy(ins + 20, (uint8_t*)&higher, 4);
-
-    } else if (ad9959.sweep_type == 3) {
-        // phase Sweep
-    }
-
-    // printf("Instruction #%d: ", addr);
-    // for (int i = 0; i < INS_SIZE; i++) {
-    //     printf("%02x ", ins[i]);
-    // }
-    // printf("\n");
-
-    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
 }
 
 // Thread safe functions for getting/setting status
@@ -295,6 +223,11 @@ void set_status(int new_status) {
     mutex_enter_blocking(&status_mutex);
     status = new_status;
     mutex_exit(&status_mutex);
+}
+
+void abort() {
+    set_status(ABORTING);
+    
 }
 
 void measure_freqs(void) {
@@ -345,27 +278,18 @@ void background() {
     multicore_fifo_push_blocking(0);
 
     while (true) {
-        // wait for the batsignal
+        // wait for the bat-signal
         uint hwstart = multicore_fifo_pop_blocking();
-
-        ad9959_send_config(&ad9959);
-        update();
 
         triggers = 0;
         set_status(RUNNING);
 
-        // make sure this will not overflow with real big numbers of
-        // instructions that would be pretty silly though
         int i = 0;
-
-        while (true) {
+        while (get_status() != ABORTING) {
             uint offset = INS_SIZE * (i++);
 
             // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) {
-                set_status(ABORTED);
-                break;
-            }
+            if (instructions[offset] == 0x00) break;
 
             spi_write_blocking(ad9959.spi, instructions + offset + 1,
                                INS_SIZE - 1);
@@ -373,6 +297,7 @@ void background() {
 
             wait(0);
         }
+        set_status(STOPPED);
     }
 }
 
@@ -399,7 +324,7 @@ void loop() {
     if (strncmp(readstring, "version", 7) == 0) {
         printf("version: %s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
-        printf("Running\n");
+        printf("%d\n", local_status);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
         DEBUG = 1;
         printf("ok\n");
@@ -416,7 +341,10 @@ void loop() {
     // ====================================================
     // Stuff that cannot be done while the table is running
     // ====================================================
-    else if (local_status != ABORTED && local_status != STOPPED) {
+    else if (strncmp(readstring, "reset", 5) == 0) {
+        reset();
+        printf("ok\n");
+    } else if (local_status != ABORTING && local_status != STOPPED) {
         printf(
             "Cannot execute command \"%s\" during buffered execution. Check "
             "status first and wait for it to return 0 or 5 (stopped or "
@@ -449,7 +377,7 @@ void loop() {
 
             printf("ok\n");
         }
-    } else if (strncmp(readstring, "config", 6) == 0) {
+    } else if (strncmp(readstring, "mode", 4) == 0) {
         // config <type:int>
 
         uint type;
@@ -503,17 +431,17 @@ void loop() {
         } else {
             printf(
                 "Invalid Command - Please set operation type using \'config\' "
-                "first.");
+                "first.\n");
         }
 
     } else if (strncmp(readstring, "start", 5) == 0) {
         multicore_fifo_push_blocking(0);
         set_status(RUNNING);
         printf("OK\n");
-    } else if (strncmp(readstring, "hwstart", 5) == 0) {
-        multicore_fifo_push_blocking(1);
-        set_status(RUNNING);
-        printf("OK\n");
+        // } else if (strncmp(readstring, "hwstart", 5) == 0) {
+        //     multicore_fifo_push_blocking(1);
+        //     set_status(RUNNING);
+        //     printf("OK\n");
     } else {
         printf("Unrecognized command: \"%s\"\n", readstring);
     }
@@ -559,15 +487,7 @@ int main() {
 
     // put chip in a known state
     init_pin(PIN_RESET);
-    gpio_put(PIN_RESET, 1);
-    sleep_ms(1);
-    gpio_put(PIN_RESET, 0);
-    sleep_ms(1);
-
-    ad9959 = ad9959_get_default_config();
-    ad9959_send_config(&ad9959);
-
-    update();
+    reset();
 
     stdio_init_all();
     stdio_init_all();

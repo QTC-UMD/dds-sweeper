@@ -42,8 +42,6 @@ void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell) {
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
     uint32_t ftw = (uint32_t)round(freq * 4294967296.l / c->sys_clk);
 
-    // pico is little endian, but ad9959 expects big endian
-    // get the 32 bit int as an array of 8 bit ints
     volatile uint8_t* bytes = (volatile uint8_t*)&ftw;
     for (int i = 0; i < 4; i++) {
         // 1 offset for the register address
