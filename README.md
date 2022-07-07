@@ -11,6 +11,8 @@ If multiple instruciton tables are run without shutting off the device, the endi
 
 If a sweep has not concluded before the next sweep is triggered, the behavior is not defined. From obersvation, it seems that this causes problems for downward sweeps, but more thorough testing would be required.
 
+When you start a table, you are locked into the parameters that are not being swept.
+
 ## Serial API
 Note: Commands must be terminated with `\n`.
 
@@ -80,3 +82,6 @@ Responds with the nmumber of external triggers processed since the last call of 
 
 
 
+## Testing
+
+- large number of instructions
