@@ -77,6 +77,80 @@ void init_pin(uint pin) {
     gpio_put(pin, 0);
 }
 
+void set_amp(uint channel, uint addr, double s0, double e0, double rate,
+             uint div) {
+    uint8_t ins[30];
+    uint32_t higher, lower, atw;
+
+    if (rate == 0) {
+        memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
+        return;
+    }
+
+    // verify the time
+    if (s0 < 0) s0 = 0;
+    if (s0 > 1) s0 = 1;
+
+    if (e0 < 0) e0 = 0;
+    if (e0 > 1) e0 = 1;
+
+    if (rate < 0) rate = 0;
+    if (rate > 1) rate = 1;
+
+    s0 = round(s0 * 1023);
+    e0 = round(e0 * 1023);
+    atw = round(rate * 1023);
+
+    if (atw < 1) atw = 1;
+
+    atw = ((atw & 0x3fc) >> 2) | ((atw & 0x3) << 14);
+
+    if (s0 <= e0) {
+        // UP SWEEP
+        lower = (uint32_t)s0;
+        higher = (uint32_t)e0;
+        ins[0] = TRIG_UP;
+        memcpy(ins + 9, (uint8_t*)&atw, 4);
+        memcpy(ins + 14, "\xff\xc0\x00\x00", 4);
+
+        ins[6] = 0x01;
+        ins[7] = div;
+
+        memcpy(ins + 24, "\x40\x43\x10", 3);
+    } else {
+        // SWEEP DOWN
+        lower = (uint32_t)e0;
+        higher = (uint32_t)s0;
+        ins[0] = TRIG_DOWN;
+        memcpy(ins + 9, "\xff\xc0\x00\x00", 4);
+        memcpy(ins + 14, (uint8_t*)&atw, 4);
+
+        ins[6] = div;
+        ins[7] = 0x01;
+
+        memcpy(ins + 24, "\x40\x43\x00", 3);
+    }
+    lower = ((lower & 0xff) << 16) | (lower & 0xff00);
+    higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
+    memcpy(ins + 2, (uint8_t*)&lower, 3);
+    memcpy(ins + 19, (uint8_t*)&higher, 4);
+
+    ins[1] = 0x06;
+    ins[5] = 0x07;
+    ins[8] = 0x08;
+    ins[13] = 0x09;
+    ins[18] = 0x0a;
+    ins[23] = 0x03;
+
+    printf("RR: %u\n", div);
+    for (int i = 0; i < INS_SIZE; i++) {
+        printf("%02x ", ins[i]);
+    }
+    printf("\n");
+
+    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+}
+
 void set_ins(uint channel, uint addr, double s0, double e0, double time) {
     uint8_t ins[30];
     uint32_t higher, lower;
@@ -121,11 +195,13 @@ void set_ins(uint channel, uint addr, double s0, double e0, double time) {
             lower = (uint32_t)e0;
             higher = (uint32_t)s0;
             ins[0] = TRIG_DOWN;
-            memcpy(ins + 9, "\xff\xc0\x00\x00", 4);
+            memcpy(ins + 9, "\x3f\xc0\x00\x00", 4);
             memcpy(ins + 14, (uint8_t*)&x, 4);
 
-            ins[6] = 0x01;
+            ins[6] = srr;
             ins[7] = 0x01;
+
+            memcpy(ins + 24, "\x40\x43\x00", 3);
 
         } else {
             // sweep up
@@ -137,6 +213,8 @@ void set_ins(uint channel, uint addr, double s0, double e0, double time) {
 
             ins[6] = 0x01;
             ins[7] = srr;
+
+            memcpy(ins + 24, "\x40\x43\x10", 3);
         }
 
         lower = ((lower & 0xff) << 16) | (lower & 0xff00);
@@ -149,6 +227,7 @@ void set_ins(uint channel, uint addr, double s0, double e0, double time) {
         ins[8] = 0x08;
         ins[13] = 0x09;
         ins[18] = 0x0a;
+        ins[23] = 0x03;
 
         printf("RR: %u\n", srr);
         for (int i = 0; i < INS_SIZE; i++) {
@@ -392,25 +471,21 @@ void loop() {
             printf("ok\n");
         }
     } else if (strncmp(readstring, "config", 6) == 0) {
-        // configtable <type:int> <no dwell:int>
+        // config <type:int>
 
-        uint type, no_dwell;
-        int parsed = sscanf(readstring, "%*s %u %u", &type, &no_dwell);
+        uint type;
+        int parsed = sscanf(readstring, "%*s %u", &type);
 
-        if (parsed < 2) {
+        if (parsed < 1) {
             printf(
-                "Invalid Command - too few arguments - expected: configtable "
+                "Invalid Command - too few arguments - expected: config "
                 "<type:int> <no dwell:int>\n");
         } else if (type > 3) {
             printf("Invalid Command - table type must be in range 0-3\n");
-        } else if (type != 0 && no_dwell > 1) {
-            printf(
-                "Invalid Command - no dwell must be in range 0-1 if not in "
-                "single tone mode\n");
         } else {
-            uint8_t sizes[] = {0, 23, 24, 0};
+            uint8_t sizes[] = {0, 27, 24, 0};
             INS_SIZE = sizes[type];
-            ad9959_config_table(&ad9959, type, no_dwell);
+            ad9959_config_table(&ad9959, type, 0);
             printf("OK\n");
         }
 
@@ -418,24 +493,30 @@ void loop() {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
         // <rate:double>
 
-        uint channel, addr;
-        double s0, e0, time;
-        int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf", &channel,
-                            &addr, &s0, &e0, &time);
+        if (ad9959.sweep_type == 0) {
+            // SINGLE TONE MODE
 
-        if (parsed < 5) {
-            printf(
-                "Invalid Command - too few arguments - expected: set "
-                "<channel:int> <addr:int> <start_point:double> "
-                "<end_point:double> <rate:double>\n");
+        } else if (ad9959.sweep_type == 1) {
+            // AMP SWEEP
+            // set <channel:int> <addr:int> <start_point:double>
+            // <end_point:double> <rate:double> <div:int>
+            uint channel, addr, div;
+            double start, end, rate;
+            sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr,
+                   &start, &end, &rate, &div);
 
-            // TODO:
-            // lots more validation
-            // make sure to check what sweep type the table is configured for
+            set_amp(channel, addr, start, end, rate, div);
+
+        } else if (ad9959.sweep_type == 2) {
+            // FREQ SWEEP
+
+        } else if (ad9959.sweep_type == 3) {
+            // PHASE SWEEP
+
         } else {
-            set_ins(channel, addr, s0, e0, time);
-
-            printf("OK\n");
+            printf(
+                "Invalid Command - Please set operation type using \'config\' "
+                "first.");
         }
 
     } else if (strncmp(readstring, "start", 5) == 0) {

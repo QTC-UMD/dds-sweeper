@@ -20,7 +20,7 @@ ad9959_config ad9959_get_default_config() {
 
     c.sys_clk = 125 * MHZ * 4;
     c.pll_mult = 4;
-    c.sweep_type = 0;
+    c.sweep_type = -1;
     c.spi = spi1;
 
     return c;

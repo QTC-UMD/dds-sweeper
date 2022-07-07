@@ -25,7 +25,7 @@ typedef struct ad9959_config {
     spi_inst_t* spi;
     uint32_t sys_clk;
     uint32_t pll_mult;
-    uint sweep_type;
+    int sweep_type;
 } ad9959_config;
 
 ad9959_config ad9959_get_default_config();
