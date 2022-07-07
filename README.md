@@ -14,49 +14,61 @@ If you are not done a sweep when you go to start a new one, that is a problem
 ## Usage
 Note: Commands must be terminated with `\n`.
 
-* `version`: 
+* `version`:  
 Responds with a string containing the firmware version.
 
 
-* `status`: 
+* `status`:  
+Returns the opperating status of the DDS-Sweeper. `0` status the instruction table is not currently being run. `1` status means the instruction table is currently being run is watching for inputs
 
 
-* `getfreqs`: 
+* `getfreqs`:  
 Responds with a multi-line string containing the current operating frequencies of various clocks (you will be most interested in `pll_sys` and `clk_sys`). Multiline string ends with `ok\n`.
 
 
-* `debug <state:str>`: 
+* `debug <state:str>`:  
 Turns on extra debug messages printed over serial. `state` should be `on` or `off` (no string quotes required).
 
 
-* `setfreq <channel:int> <frequency:float>`:
+* `setfreq <channel:int> <frequency:float>`:  
 
 
-* `config <type:int> <no dwell:int>`:
-0: single tone
-1: amp
-2: freq
-3: phase
+* `mode <type:int>`:  
+Configures what mode the DDS-Sweeper is operating in
+  - 0: single tone
+  - 1: amplitude sweep
+  - 2: frequency sweep
+  - 3: phase sweep  
 
-make sure the sweep type is set before you start adding structions
-
-
-* `set <channel:int> <addr:int> <start_point:double> <end_point:double> <rate:double>`:
+  The operating mode must be set before instructions can be programmed into the DDS-Sweeper
 
 
-* ``:
+* `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <div:int>`:  
+Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `div` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` differe depending on the operating mode od the DDS-Sweeper  
+  - Single Tone Mode (mode 0)
+  - Amplitude Sweep (mode 1)  
+    `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proprtion of the maximum output amplitude. `delta` is the desired change in that propertion.
+  - Frequency Sweep (mode 2)  
+    `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the frequency resolution.
+  - Phase Sweep (mode 3)
+
+  
 
 
-* ``:
+* `numtriggers`:  
+Responds with the nmumber of external triggers processed since the last call of `start`
 
 
-* ``:
+* ``:  
 
 
-* ``:
+* ``:  
 
 
-* ``:
+* ``:  
+
+
+* ``:  
 
 
 
