@@ -39,8 +39,6 @@ int status = STOPPED;
 #define TRIG_UP 3
 #define TRIG_DOWN 5
 
-void abort_run();
-
 // ============================================================================
 // global variables
 // ============================================================================
@@ -72,8 +70,6 @@ void wait(uint channel) {
 void update() { pio_sm_put(trig.pio, trig.sm, 0); }
 
 void reset() {
-    abort_run();
-
     gpio_put(PIN_RESET, 1);
     sleep_ms(1);
     gpio_put(PIN_RESET, 0);
@@ -344,7 +340,9 @@ void loop() {
         printf("%u triggers recieved in last run\n", triggers);
         printf("ok\n");
     } else if (strncmp(readstring, "reset", 5) == 0) {
+        abort_run();
         reset();
+        set_status(STOPPED);
         printf("ok\n");
     } else if (strncmp(readstring, "abort", 5) == 0) {
         abort_run();
@@ -353,12 +351,12 @@ void loop() {
     // ====================================================
     // Stuff that cannot be done while the table is running
     // ====================================================
-    else if (local_status != ABORTING && local_status != STOPPED) {
+    else if (local_status != STOPPED) {
         printf(
             "Cannot execute command \"%s\" during buffered execution. Check "
-            "status first and wait for it to return 0 or 5 (stopped or "
+            "status first and wait for it to return %d (stopped or "
             "aborted).\n",
-            readstring);
+            readstring, STOPPED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         ad9959_read_all(&ad9959);
         printf("ok\n");
@@ -386,6 +384,30 @@ void loop() {
 
             printf("ok\n");
         }
+    } else if (strncmp(readstring, "setamp", 6) == 0) {
+        // setfreq <channel:int> <frequency:float>
+
+        uint channel;
+        double freq;
+        int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
+        if (parsed < 2) {
+            printf(
+                "Invalid Command - too few arguments - expected: setamp "
+                "<channel:int> <amp:double>\n");
+        } else if (channel < 0 || channel > 3) {
+            printf("Invalid Command - channel must be in range 0-3\n");
+        } else {
+            uint64_t word = ad9959_config_amp(&ad9959, channel, freq);
+            ad9959_send_config(&ad9959);
+            update();
+
+            if (DEBUG) {
+                double a = word / 1023.0f;
+                printf("%12lf\n", a);
+            }
+
+            printf("ok\n");
+        }
     } else if (strncmp(readstring, "mode", 4) == 0) {
         // config <type:int>
 
@@ -405,7 +427,7 @@ void loop() {
             printf("OK\n");
         }
 
-    } else if (strncmp(readstring, "set", 3) == 0) {
+    } else if (strncmp(readstring, "set ", 4) == 0) {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
         // <rate:double>
 

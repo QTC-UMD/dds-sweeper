@@ -42,7 +42,7 @@ void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell) {
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
     uint32_t ftw = (uint32_t)round(freq * 4294967296.l / c->sys_clk);
 
-    volatile uint8_t* bytes = (volatile uint8_t*)&ftw;
+    uint8_t* bytes = (uint8_t*)&ftw;
     for (int i = 0; i < 4; i++) {
         // 1 offset for the register address
         c->cftw0[channel][i + 1] = bytes[3 - i];
@@ -50,6 +50,21 @@ uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
 
     // for debugging purposes
     return ftw;
+}
+
+
+uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp) {
+    uint32_t atw = (uint16_t)round(amp * 1023);
+
+    // atw = ((atw & 0x3fc) >> 2) | ((atw & 0x3) << 14);
+    atw |= 0x1000;
+
+    printf("-- %06x\n", atw);
+
+    memcpy(c->acr[channel] + 1, (uint8_t*)&atw, 3);
+
+    // for debugging purposes
+    return atw;
 }
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {
