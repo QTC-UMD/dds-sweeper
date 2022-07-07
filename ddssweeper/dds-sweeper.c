@@ -39,6 +39,8 @@ int status = STOPPED;
 #define TRIG_UP 3
 #define TRIG_DOWN 5
 
+void abort_run();
+
 // ============================================================================
 // global variables
 // ============================================================================
@@ -69,8 +71,9 @@ void wait(uint channel) {
 
 void update() { pio_sm_put(trig.pio, trig.sm, 0); }
 
-
 void reset() {
+    abort_run();
+
     gpio_put(PIN_RESET, 1);
     sleep_ms(1);
     gpio_put(PIN_RESET, 0);
@@ -225,9 +228,11 @@ void set_status(int new_status) {
     mutex_exit(&status_mutex);
 }
 
-void abort() {
+void abort_run() {
     set_status(ABORTING);
-    
+
+    gpio_put(TRIGGER, 1);
+    gpio_put(TRIGGER, 0);
 }
 
 void measure_freqs(void) {
@@ -297,6 +302,7 @@ void background() {
 
             wait(0);
         }
+        pio_sm_clear_fifos(trig.pio, trig.sm);
         set_status(STOPPED);
     }
 }
@@ -337,14 +343,17 @@ void loop() {
     } else if (strncmp(readstring, "numtriggers", 11) == 0) {
         printf("%u triggers recieved in last run\n", triggers);
         printf("ok\n");
+    } else if (strncmp(readstring, "reset", 5) == 0) {
+        reset();
+        printf("ok\n");
+    } else if (strncmp(readstring, "abort", 5) == 0) {
+        abort_run();
+        printf("ok\n");
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
     // ====================================================
-    else if (strncmp(readstring, "reset", 5) == 0) {
-        reset();
-        printf("ok\n");
-    } else if (local_status != ABORTING && local_status != STOPPED) {
+    else if (local_status != ABORTING && local_status != STOPPED) {
         printf(
             "Cannot execute command \"%s\" during buffered execution. Check "
             "status first and wait for it to return 0 or 5 (stopped or "
@@ -484,6 +493,8 @@ int main() {
     trig.sm = pio_claim_unused_sm(pio0, true);
     trig.offset = pio_add_program(pio0, &trigger_program);
     trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P3, PIN_UPDATE);
+
+    init_pin(TRIGGER);
 
     // put chip in a known state
     init_pin(PIN_RESET);

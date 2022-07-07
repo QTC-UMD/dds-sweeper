@@ -14,6 +14,14 @@ If a sweep has not concluded before the next sweep is triggered, the behavior is
 ## Serial API
 Note: Commands must be terminated with `\n`.
 
+* `reset`:  
+Kills the current run and resets the DDS-Sweeper to default settings.
+
+
+* `abort`:  
+Kills the current run. No promises about what the output will be after an `abort`.
+
+
 * `version`:  
 Responds with a string containing the firmware version.
 
