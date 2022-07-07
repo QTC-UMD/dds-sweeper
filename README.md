@@ -1,17 +1,17 @@
 # dds-sweeper
 Raspberry Pi Pico interface for the AD9959 DDS
 
-## Specs
+## Notes
 The frequency resolution of the AD9959 is 
 $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\sim 0.1164$ Hz. Any frequency input to the dds-sweeper will be rounded to an integer multiple of the frequency resolution.
 
-Timing uncertainty of $\sim 70$
+There seems to be a timing uncertainty of $\sim100-200$ ns between when a trigger signal is received and when the next sweep actually starts for amplitudes.
 
-Always starts a table at 0 amp/freq/whatever I think
+If multiple instruciton tables are run without shutting off the device, the ending state of the previous table will presist until the first instruction of the next table is triggered.
 
-If you are not done a sweep when you go to start a new one, that is a problem
+If a sweep has not concluded before the next sweep is triggered, the behavior is not defined. From obersvation, it seems that this causes problems for downward sweeps, but more thorough testing would be required.
 
-## Usage
+## Serial API
 Note: Commands must be terminated with `\n`.
 
 * `version`:  
