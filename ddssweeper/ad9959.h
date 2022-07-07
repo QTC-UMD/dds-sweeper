@@ -38,7 +38,7 @@ uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq);
 
 void ad9959_send_config(ad9959_config* c);
 
-# if 0
+# if 1
 void ad9959_read_all(ad9959_config* c);
 # endif
 

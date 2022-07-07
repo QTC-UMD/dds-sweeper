@@ -87,16 +87,6 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         return;
     }
 
-    // verify the time
-    if (s0 < 0) s0 = 0;
-    if (s0 > 1) s0 = 1;
-
-    if (e0 < 0) e0 = 0;
-    if (e0 > 1) e0 = 1;
-
-    if (rate < 0) rate = 0;
-    if (rate > 1) rate = 1;
-
     s0 = round(s0 * 1023);
     e0 = round(e0 * 1023);
     atw = round(rate * 1023);
@@ -142,13 +132,73 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
     ins[18] = 0x0a;
     ins[23] = 0x03;
 
-    printf("RR: %u\n", div);
+    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+}
+
+void set_freq(uint channel, uint addr, double s0, double e0, double rate,
+              uint div) {
+    uint8_t ins[30];
+    uint32_t higher, lower, ftw;
+
+    if (rate == 0) {
+        memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
+        return;
+    }
+
+    // convert from frequencies to tuning words
+    uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
+    uint32_t eword = round(e0 / ad9959.sys_clk * 4294967296.0);
+    uint32_t rword = round(rate / ad9959.sys_clk * 4294967296.0);
+
+    if (rword < 1) rword = 1;
+
+    // gross bit shifting to force big endianness
+    sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
+            ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
+    eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
+            ((eword & 0xff0000) >> 8) | ((eword & 0xff000000) >> 24);
+    rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
+            ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
+
+    if (s0 <= e0) {
+        // sweep up
+        ins[0] = TRIG_UP;
+        lower = sword;
+        higher = eword;
+        memcpy(ins + 10, (uint8_t*)&rword, 4);
+        memcpy(ins + 15, "\x00\x00\x00\x00", 4);
+        ins[7] = div;
+        ins[8] = div;
+        memcpy(ins + 25, "\x80\x43\x10", 3);
+    } else {
+        // sweep down
+        ins[0] = TRIG_DOWN;
+        lower = eword;
+        higher = sword;
+        memcpy(ins + 10, "\xff\xff\xff\xff", 4);
+        memcpy(ins + 15, (uint8_t*)&rword, 4);
+        ins[7] = div;
+        ins[8] = div;
+        memcpy(ins + 25, "\x80\x43\x00", 3);
+    }
+
+    ins[1] = 0x04;
+    ins[6] = 0x07;
+    ins[9] = 0x08;
+    ins[14] = 0x09;
+    ins[19] = 0x0a;
+    ins[24] = 0x03;
+
+    memcpy(ins + 2, (uint8_t*)&lower, 4);
+    memcpy(ins + 20, (uint8_t*)&higher, 4);
+
+    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+
+    printf("Instruction #%d: ", addr);
     for (int i = 0; i < INS_SIZE; i++) {
         printf("%02x ", ins[i]);
     }
     printf("\n");
-
-    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
 }
 
 void set_ins(uint channel, uint addr, double s0, double e0, double time) {
@@ -163,77 +213,6 @@ void set_ins(uint channel, uint addr, double s0, double e0, double time) {
 
     } else if (ad9959.sweep_type == 1) {
         // AMP SWEEP
-
-        // verify the time
-        if (s0 < 0) s0 = 0;
-        if (s0 > 1) s0 = 1;
-
-        if (e0 < 0) e0 = 0;
-        if (e0 > 1) e0 = 1;
-
-        s0 = round(s0 * 1023);
-        e0 = round(e0 * 1023);
-
-        uint srr = 1;
-        double cycles, word;
-        while (srr <= 0xff) {
-            cycles = time * ad9959.sys_clk / 4.0 / srr;
-            word = abs(e0 - s0) / cycles;
-
-            if (word < 1) {
-                srr++;
-            } else {
-                break;
-            }
-        }
-        if (word < 1) word = 1;
-        uint32_t x = round(word);
-        x = ((x & 0x3fc) >> 2) | ((x & 0x3) << 14);
-
-        if (s0 > e0) {
-            // sweep down
-            lower = (uint32_t)e0;
-            higher = (uint32_t)s0;
-            ins[0] = TRIG_DOWN;
-            memcpy(ins + 9, "\x3f\xc0\x00\x00", 4);
-            memcpy(ins + 14, (uint8_t*)&x, 4);
-
-            ins[6] = srr;
-            ins[7] = 0x01;
-
-            memcpy(ins + 24, "\x40\x43\x00", 3);
-
-        } else {
-            // sweep up
-            lower = (uint32_t)s0;
-            higher = (uint32_t)e0;
-            ins[0] = TRIG_UP;
-            memcpy(ins + 9, (uint8_t*)&x, 4);
-            memcpy(ins + 14, "\xff\xc0\x00\x00", 4);
-
-            ins[6] = 0x01;
-            ins[7] = srr;
-
-            memcpy(ins + 24, "\x40\x43\x10", 3);
-        }
-
-        lower = ((lower & 0xff) << 16) | (lower & 0xff00);
-        higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
-        memcpy(ins + 2, (uint8_t*)&lower, 3);
-        memcpy(ins + 19, (uint8_t*)&higher, 4);
-
-        ins[1] = 0x06;
-        ins[5] = 0x07;
-        ins[8] = 0x08;
-        ins[13] = 0x09;
-        ins[18] = 0x0a;
-        ins[23] = 0x03;
-
-        printf("RR: %u\n", srr);
-        for (int i = 0; i < INS_SIZE; i++) {
-            printf("%02x ", ins[i]);
-        }
-        printf("\n");
 
     } else if (ad9959.sweep_type == 2) {
         // freq Sweep
@@ -443,9 +422,9 @@ void loop() {
             "status first and wait for it to return 0 or 5 (stopped or "
             "aborted).\n",
             readstring);
-        // } else if (strncmp(readstring, "readregs", 8) == 0) {
-        //     ad9959_read_all(&ad9959);
-        //     printf("ok\n");
+    } else if (strncmp(readstring, "readregs", 8) == 0) {
+        ad9959_read_all(&ad9959);
+        printf("ok\n");
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
         // setfreq <channel:int> <frequency:float>
 
@@ -483,7 +462,7 @@ void loop() {
         } else if (type > 3) {
             printf("Invalid Command - table type must be in range 0-3\n");
         } else {
-            uint8_t sizes[] = {0, 27, 24, 0};
+            uint8_t sizes[] = {0, 27, 28, 0};
             INS_SIZE = sizes[type];
             ad9959_config_table(&ad9959, type, 0);
             printf("OK\n");
@@ -509,6 +488,14 @@ void loop() {
 
         } else if (ad9959.sweep_type == 2) {
             // FREQ SWEEP
+            // set <channel:int> <addr:int> <start_point:double>
+            // <end_point:double> <rate:double> <div:int>
+            uint channel, addr, div;
+            double start, end, rate;
+            sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr,
+                   &start, &end, &rate, &div);
+
+            set_freq(channel, addr, start, end, rate, div);
 
         } else if (ad9959.sweep_type == 3) {
             // PHASE SWEEP

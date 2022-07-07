@@ -9,6 +9,7 @@ Timing uncertainty of $\sim 70$
 
 Always starts a table at 0 amp/freq/whatever I think
 
+If you are not done a sweep when you go to start a new one, that is a problem
 
 ## Usage
 Note: Commands must be terminated with `\n`.

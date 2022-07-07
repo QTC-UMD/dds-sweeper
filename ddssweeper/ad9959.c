@@ -86,7 +86,7 @@ void ad9959_send_config(ad9959_config* c) {
     spi_write_blocking(c->spi, c->csr, 2);
 }
 
-#if 0
+#if 1
 // could be helpful for debugging
 static void read(ad9959_config* c, uint8_t reg, size_t len, uint8_t* buf) {
     reg |= 0x80;
@@ -95,6 +95,8 @@ static void read(ad9959_config* c, uint8_t reg, size_t len, uint8_t* buf) {
 }
 
 void ad9959_read_all(ad9959_config* c) {
+    spi_set_baudrate(spi1, 1 * MHZ);
+
     uint8_t resp[20];
 
     read(c, 0x00, 1, resp);
@@ -135,5 +137,6 @@ void ad9959_read_all(ad9959_config* c) {
         printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
 
     }
+    spi_set_baudrate(spi1, 100 * MHZ);
 }
 #endif
