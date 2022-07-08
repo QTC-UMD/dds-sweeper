@@ -87,6 +87,32 @@ void init_pin(uint pin) {
     gpio_put(pin, 0);
 }
 
+void set_tone(uint channel, uint addr, double freq) {
+    uint8_t ins[10];
+
+    if (freq == 0) {
+        memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
+        return;
+    }
+
+    ins[0] = 0x04;
+    ins[1] = 0x04;
+
+    uint ftw = round(freq / ad9959.sys_clk * 4294967296.0);
+    ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
+          ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
+
+    memcpy(ins + 2, (uint8_t*)&ftw, 4);
+
+    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+
+    printf("Instruction %d: ", addr);
+    for (int i = 0; i < 5; i++) {
+        printf("%02x ", *(instructions + addr * INS_SIZE + i));
+    }
+    printf("\n");
+}
+
 void set_amp(uint channel, uint addr, double s0, double e0, double rate,
              uint div) {
     uint8_t ins[30];
@@ -472,7 +498,7 @@ void loop() {
         } else if (type > 3) {
             printf("Invalid Command - table type must be in range 0-3\n");
         } else {
-            uint8_t sizes[] = {0, 27, 28, 0};
+            uint8_t sizes[] = {6, 27, 28, 0};
             INS_SIZE = sizes[type];
             ad9959_config_table(&ad9959, type, 0);
             printf("OK\n");
@@ -484,6 +510,16 @@ void loop() {
 
         if (ad9959.sweep_type == 0) {
             // SINGLE TONE MODE
+            uint channel, addr;
+            double freq;
+            int parsed =
+                sscanf(readstring, "%*s %u %u %lf", &channel, &addr, &freq);
+
+            if (parsed < 3) {
+                printf("Invalid Command - expected: \n");
+            } else {
+                set_tone(channel, addr, freq);
+            }
 
         } else if (ad9959.sweep_type == 1) {
             // AMP SWEEP
@@ -491,10 +527,14 @@ void loop() {
             // <end_point:double> <rate:double> <div:int>
             uint channel, addr, div;
             double start, end, rate;
-            sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr,
-                   &start, &end, &rate, &div);
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
+                                &channel, &addr, &start, &end, &rate, &div);
 
-            set_amp(channel, addr, start, end, rate, div);
+            if (parsed < 6) {
+                printf("Invalid Command - expected: \n");
+            } else {
+                set_amp(channel, addr, start, end, rate, div);
+            }
 
         } else if (ad9959.sweep_type == 2) {
             // FREQ SWEEP
@@ -502,10 +542,14 @@ void loop() {
             // <end_point:double> <rate:double> <div:int>
             uint channel, addr, div;
             double start, end, rate;
-            sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr,
-                   &start, &end, &rate, &div);
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
+                                &channel, &addr, &start, &end, &rate, &div);
 
-            set_freq(channel, addr, start, end, rate, div);
+            if (parsed < 6) {
+                printf("Invalid Command - expected: \n");
+            } else {
+                set_freq(channel, addr, start, end, rate, div);
+            }
 
         } else if (ad9959.sweep_type == 3) {
             // PHASE SWEEP
