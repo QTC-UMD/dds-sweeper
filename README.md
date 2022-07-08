@@ -1,19 +1,6 @@
 # dds-sweeper
 Raspberry Pi Pico interface for the AD9959 DDS
 
-## TODO
-- multichannel support
-- external clock mode
-- self timed mode
-
-
-## Testing
-- large number of instructions
-- different types of sweeps back to back to back to back
-    up - up
-    up - down
-    down - up
-    down - down
     
 
 ## Notes
