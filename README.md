@@ -74,8 +74,9 @@ Responds with the nmumber of external triggers processed since the last call of 
 * `setmult <pll_mult:int>`:    
 Sets the pll multiplerier the AD9959 uses to get the from the reference clock to the internal system clock. Valid values are 1 or 4-20.
 
-* ``:  
-
+* `setclock <mode:int> <freq:int>`:  
+Reconfigures the source/reference clock.
+  - Mode `0`: Use pico system clock as reference to the AD9959
 
 * ``:  
 
