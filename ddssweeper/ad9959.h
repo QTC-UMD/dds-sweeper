@@ -23,7 +23,8 @@ typedef struct ad9959_config {
     uint8_t rdw[4][5];
     uint8_t fdw[4][5];
     spi_inst_t* spi;
-    uint32_t sys_clk;
+    double sys_clk;
+    double ref_clk;
     uint32_t pll_mult;
     int sweep_type;
 } ad9959_config;

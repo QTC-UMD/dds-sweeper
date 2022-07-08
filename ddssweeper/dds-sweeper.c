@@ -408,6 +408,22 @@ void loop() {
 
             printf("ok\n");
         }
+    } else if (strncmp(readstring, "setmult", 6) == 0) {
+        uint mult;
+
+        int parsed = sscanf(readstring, "%*s %u", &mult);
+
+        if (parsed < 1) {
+            printf("Invalid Command - expected: setmult <pll_mult:int>\n");
+        } else {
+            // could do more validation to make sure it is a valid
+            // multiply/system clock freq
+            ad9959_config_pll_mult(&ad9959, mult);
+            ad9959_send_config(&ad9959);
+            update();
+
+            printf("ok\n");
+        }
     } else if (strncmp(readstring, "mode", 4) == 0) {
         // config <type:int>
 
@@ -461,18 +477,22 @@ void loop() {
 
         } else {
             printf(
-                "Invalid Command - Please set operation type using \'config\' "
+                "Invalid Command - Please set operation type using \'mode\' "
                 "first.\n");
         }
 
     } else if (strncmp(readstring, "start", 5) == 0) {
-        multicore_fifo_push_blocking(0);
-        set_status(RUNNING);
-        printf("OK\n");
-        // } else if (strncmp(readstring, "hwstart", 5) == 0) {
-        //     multicore_fifo_push_blocking(1);
-        //     set_status(RUNNING);
-        //     printf("OK\n");
+        if (ad9959.sweep_type == -1) {
+            printf("Please select an operating mode using \'mode\' first.\n");
+        } else {
+            multicore_fifo_push_blocking(0);
+            set_status(RUNNING);
+            printf("OK\n");
+            // } else if (strncmp(readstring, "hwstart", 5) == 0) {
+            //     multicore_fifo_push_blocking(1);
+            //     set_status(RUNNING);
+            //     printf("OK\n");
+        }
     } else {
         printf("Unrecognized command: \"%s\"\n", readstring);
     }
@@ -524,6 +544,8 @@ int main() {
 
     stdio_init_all();
     stdio_init_all();
+
+    memset(instructions, 0, 100);
 
     printf("\n==================================\n");
 

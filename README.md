@@ -13,6 +13,8 @@ If a sweep has not concluded before the next sweep is triggered, the behavior is
 
 When you start a table, you are locked into the parameters that are not being swept.
 
+If you
+
 ## Serial API
 Note: Commands must be terminated with `\n`.
 
@@ -69,17 +71,22 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
 Responds with the nmumber of external triggers processed since the last call of `start`
 
 
-* ``:  
-
-
-* ``:  
-
+* `setmult <pll_mult:int>`:    
+Sets the pll multiplerier the AD9959 uses to get the from the reference clock to the internal system clock. Valid values are 1 or 4-20.
 
 * ``:  
 
 
 * ``:  
 
+
+* ``:  
+
+
+## TODO
+- multichannel support
+- change clock settings
+- self timed mode
 
 
 ## Testing

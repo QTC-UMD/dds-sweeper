@@ -18,8 +18,9 @@ ad9959_config ad9959_get_default_config() {
         memcpy(c.fdw[i], "\x09\x00\x40\x00\x00", 5);
     }
 
-    c.sys_clk = 125 * MHZ * 4;
+    c.ref_clk = 125 * MHZ;
     c.pll_mult = 4;
+    c.sys_clk = c.ref_clk * c.pll_mult;
     c.sweep_type = -1;
     c.spi = spi1;
 
@@ -69,6 +70,12 @@ uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp) {
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {
     c->pll_mult = val;
+    c->sys_clk = c->ref_clk * val;
+
+    c->fr1[1] &= 0b10000011;
+    c->fr1[1] |= val << 2;
+
+    if (c->sys_clk > 255) c->fr1[1] |= 0x80;
 }
 
 void ad9959_config_sys_clk(ad9959_config* c, uint32_t val) {
