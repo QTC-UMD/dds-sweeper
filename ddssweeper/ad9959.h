@@ -31,17 +31,14 @@ typedef struct ad9959_config {
 
 ad9959_config ad9959_get_default_config();
 
-void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell);
+void ad9959_config_mode(ad9959_config* c, uint type, uint no_dwell);
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val);
-void ad9959_config_sys_clk(ad9959_config* c, uint32_t val);
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq);
 uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp);
 
 void ad9959_send_config(ad9959_config* c);
 
-# if 1
 void ad9959_read_all(ad9959_config* c);
-# endif
 
 #endif

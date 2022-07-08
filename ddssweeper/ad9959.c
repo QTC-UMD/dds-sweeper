@@ -4,18 +4,29 @@ ad9959_config ad9959_get_default_config() {
     ad9959_config c;
 
     // TODO: find a better way to do this?
+    // its probably fin actually
+
+    // 2 wire spi mode with all channels selected
     memcpy(c.csr, "\x00\xf2", 2);
+
+    // PLL multiplier of x4
     memcpy(c.fr1, "\x01\x90\x00\x00", 4);
+
+    // nothing in FR2
     memcpy(c.fr2, "\x02\x00\x00", 3);
 
+
     for (int i = 0; i < 4; i++) {
+        // select the channel
         memcpy(c.cfr[i], "\x03\x00\x03\x00", 4);
-        memcpy(c.cftw0[i], "\x04\x66\x66\x66\x66", 5);
+
+        // all channel registers initialized to zero
+        memcpy(c.cftw0[i], "\x04\x00\x00\x00\x00", 5);
         memcpy(c.cpow0[i], "\x05\x00\x00", 3);
         memcpy(c.acr[i], "\x06\x00\x00\x00", 4);
-        memcpy(c.lsrr[i], "\x07\x01\x01", 3);
-        memcpy(c.rdw[i], "\x08\x00\x40\x00\x00", 5);
-        memcpy(c.fdw[i], "\x09\x00\x40\x00\x00", 5);
+        memcpy(c.lsrr[i], "\x07\x00\x00", 3);
+        memcpy(c.rdw[i], "\x08\x00\x00\x00\x00", 5);
+        memcpy(c.fdw[i], "\x09\x00\x00\x00\x00", 5);
     }
 
     c.ref_clk = 125 * MHZ;
@@ -27,9 +38,10 @@ ad9959_config ad9959_get_default_config() {
     return c;
 }
 
-void ad9959_config_table(ad9959_config* c, uint type, uint no_dwell) {
+void ad9959_config_mode(ad9959_config* c, uint type, uint no_dwell) {
     c->sweep_type = type;
 
+    // zero out the modulation mode bits
     c->fr1[2] &= 0b11111100;
 
     for (int i = 0; i < 4; i++) {
@@ -49,7 +61,7 @@ uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
         c->cftw0[channel][i + 1] = bytes[3 - i];
     }
 
-    // for debugging purposes
+    // for debugging
     return ftw;
 }
 
@@ -57,14 +69,12 @@ uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
 uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp) {
     uint32_t atw = (uint16_t)round(amp * 1023);
 
-    // atw = ((atw & 0x3fc) >> 2) | ((atw & 0x3) << 14);
+    // amplitude multiplier bit
     atw |= 0x1000;
-
-    printf("-- %06x\n", atw);
 
     memcpy(c->acr[channel] + 1, (uint8_t*)&atw, 3);
 
-    // for debugging purposes
+    // for debugging
     return atw;
 }
 
@@ -72,26 +82,23 @@ void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {
     c->pll_mult = val;
     c->sys_clk = c->ref_clk * val;
 
+    // zero out the current pll multiplier
     c->fr1[1] &= 0b10000011;
     c->fr1[1] |= val << 2;
 
+    // VCO gain bit
+    // maybe should give the user more control?
     if (c->sys_clk > 255) c->fr1[1] |= 0x80;
-}
-
-void ad9959_config_sys_clk(ad9959_config* c, uint32_t val) {
-    c->sys_clk;
-    val;
 }
 
 void ad9959_send_config(ad9959_config* c) {
     spi_write_blocking(c->spi, c->fr1, 4);
     spi_write_blocking(c->spi, c->fr2, 3);
 
-    // uint32_t csr = 0x0f & c->csr[1];
     for (int i = 0; i < 4; i++) {
         uint8_t csr[] = {
             0x00,
-            (0x0f & c->csr[1]) | (1u << (i + 4)),
+            (1u << (i + 4)) | 0x02,
         };
         spi_write_blocking(c->spi, csr, 2);
         spi_write_blocking(c->spi, c->cfr[i], 4);
@@ -106,7 +113,6 @@ void ad9959_send_config(ad9959_config* c) {
     spi_write_blocking(c->spi, c->csr, 2);
 }
 
-#if 1
 // could be helpful for debugging
 static void read(ad9959_config* c, uint8_t reg, size_t len, uint8_t* buf) {
     reg |= 0x80;
@@ -159,4 +165,3 @@ void ad9959_read_all(ad9959_config* c) {
     }
     spi_set_baudrate(spi1, 100 * MHZ);
 }
-#endif

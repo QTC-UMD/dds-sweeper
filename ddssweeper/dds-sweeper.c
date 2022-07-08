@@ -59,15 +59,90 @@ uint INS_SIZE = 0;
 uint8_t instructions[20000];
 
 // ============================================================================
-// Helper Functions
+// Setup
 // ============================================================================
 
-void wait(uint channel) {
-    pio_sm_get_blocking(trig.pio, trig.sm);
-    triggers++;
+void init_pin(uint pin) {
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_OUT);
+    gpio_put(pin, 0);
 }
 
-void update() { pio_sm_put(trig.pio, trig.sm, 0); }
+int get_status() {
+    mutex_enter_blocking(&status_mutex);
+    int temp = status;
+    mutex_exit(&status_mutex);
+    return temp;
+}
+
+void set_status(int new_status) {
+    mutex_enter_blocking(&status_mutex);
+    status = new_status;
+    mutex_exit(&status_mutex);
+}
+
+void measure_freqs(void) {
+    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
+    // License
+    uint f_pll_sys =
+        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
+    uint f_pll_usb =
+        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
+    uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
+    uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
+    uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
+    uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
+    uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+    uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+
+    printf("pll_sys = %dkHz\n", f_pll_sys);
+    printf("pll_usb = %dkHz\n", f_pll_usb);
+    printf("rosc = %dkHz\n", f_rosc);
+    printf("clk_sys = %dkHz\n", f_clk_sys);
+    printf("clk_peri = %dkHz\n", f_clk_peri);
+    printf("clk_usb = %dkHz\n", f_clk_usb);
+    printf("clk_adc = %dkHz\n", f_clk_adc);
+    printf("clk_rtc = %dkHz\n", f_clk_rtc);
+}
+
+void resus_callback(void) {
+    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
+    // License
+    // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
+    pll_init(pll_sys, 1, 1500 * MHZ, 6, 2);
+
+    // CLK SYS = PLL SYS (125MHz) / 1 = 125MHz
+    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+                    CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
+                    125 * MHZ);
+
+    // Reconfigure IO
+    stdio_init_all();
+    printf("Resus event fired\n");
+
+    // Wait for uart output to finish
+    uart_default_tx_wait_blocking();
+}
+
+void readline() {
+    int i = 0;
+    char c;
+    while (true) {
+        c = getchar();
+        if (c == '\n') {
+            readstring[i] = '\0';
+            return;
+        } else {
+            readstring[i++] = c;
+        }
+    }
+}
+
+// ============================================================================
+// Interact with AD9959
+// ============================================================================
+
+void update() { pio_sm_put(trig.pio, trig.sm, UPDATE); }
 
 void reset() {
     gpio_put(PIN_RESET, 1);
@@ -81,11 +156,23 @@ void reset() {
     update();
 }
 
-void init_pin(uint pin) {
-    gpio_init(pin);
-    gpio_set_dir(pin, GPIO_OUT);
-    gpio_put(pin, 0);
+void wait(uint channel) {
+    pio_sm_get_blocking(trig.pio, trig.sm);
+    triggers++;
 }
+
+void abort_run() {
+    if (get_status() == RUNNING) {
+        set_status(ABORTING);
+
+        gpio_put(TRIGGER, 1);
+        gpio_put(TRIGGER, 0);
+    }
+}
+
+// ============================================================================
+// Set Table Instructions
+// ============================================================================
 
 void set_tone(uint channel, uint addr, double freq) {
     uint8_t ins[10];
@@ -236,71 +323,13 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     printf("\n");
 }
 
-// Thread safe functions for getting/setting status
-int get_status() {
-    mutex_enter_blocking(&status_mutex);
-    int status_copy = status;
-    mutex_exit(&status_mutex);
-    return status_copy;
-}
 
-void set_status(int new_status) {
-    mutex_enter_blocking(&status_mutex);
-    status = new_status;
-    mutex_exit(&status_mutex);
-}
 
-void abort_run() {
-    if (get_status() == RUNNING) {
-        set_status(ABORTING);
 
-        gpio_put(TRIGGER, 1);
-        gpio_put(TRIGGER, 0);
-    }
-}
 
-void measure_freqs(void) {
-    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
-    // License
-    uint f_pll_sys =
-        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
-    uint f_pll_usb =
-        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
-    uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
-    uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
-    uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
-    uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
-    uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
-    uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
-
-    printf("pll_sys = %dkHz\n", f_pll_sys);
-    printf("pll_usb = %dkHz\n", f_pll_usb);
-    printf("rosc = %dkHz\n", f_rosc);
-    printf("clk_sys = %dkHz\n", f_clk_sys);
-    printf("clk_peri = %dkHz\n", f_clk_peri);
-    printf("clk_usb = %dkHz\n", f_clk_usb);
-    printf("clk_adc = %dkHz\n", f_clk_adc);
-    printf("clk_rtc = %dkHz\n", f_clk_rtc);
-}
-
-void resus_callback(void) {
-    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
-    // License
-    // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
-    pll_init(pll_sys, 1, 1500 * MHZ, 6, 2);
-
-    // CLK SYS = PLL SYS (125MHz) / 1 = 125MHz
-    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-                    CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
-                    125 * MHZ);
-
-    // Reconfigure IO
-    stdio_init_all();
-    printf("Resus event fired\n");
-
-    // Wait for uart output to finish
-    uart_default_tx_wait_blocking();
-}
+// ============================================================================
+// Main Tasks
+// ============================================================================
 
 void background() {
     // let other core know we ready
@@ -319,7 +348,7 @@ void background() {
 
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
-            
+
             // printf("transferring: %d\n", i);
 
             spi_write_blocking(ad9959.spi, instructions + offset + 1,
@@ -330,20 +359,6 @@ void background() {
         }
         pio_sm_clear_fifos(trig.pio, trig.sm);
         set_status(STOPPED);
-    }
-}
-
-void readline() {
-    int i = 0;
-    char c;
-    while (true) {
-        c = getchar();
-        if (c == '\n') {
-            readstring[i] = '\0';
-            return;
-        } else {
-            readstring[i++] = c;
-        }
     }
 }
 
@@ -504,7 +519,7 @@ void loop() {
         } else {
             uint8_t sizes[] = {6, 27, 28, 0};
             INS_SIZE = sizes[type];
-            ad9959_config_table(&ad9959, type, 0);
+            ad9959_config_mode(&ad9959, type, 0);
             printf("OK\n");
         }
 

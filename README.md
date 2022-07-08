@@ -17,7 +17,7 @@ If a sweep has not concluded before the next sweep is triggered, the behavior is
 
 When you start a table, you are locked into the parameters that are not being swept.
 
-
+For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of operation.
 
 ## Serial API
 Note: Commands must be terminated with `\n`.
