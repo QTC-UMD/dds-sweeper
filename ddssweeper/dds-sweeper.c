@@ -251,10 +251,12 @@ void set_status(int new_status) {
 }
 
 void abort_run() {
-    set_status(ABORTING);
+    if (get_status() == RUNNING) {
+        set_status(ABORTING);
 
-    gpio_put(TRIGGER, 1);
-    gpio_put(TRIGGER, 0);
+        gpio_put(TRIGGER, 1);
+        gpio_put(TRIGGER, 0);
+    }
 }
 
 void measure_freqs(void) {
