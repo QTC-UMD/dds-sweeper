@@ -319,6 +319,8 @@ void background() {
 
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
+            
+            // printf("transferring: %d\n", i);
 
             spi_write_blocking(ad9959.spi, instructions + offset + 1,
                                INS_SIZE - 1);
@@ -567,7 +569,6 @@ void loop() {
             printf("Please select an operating mode using \'mode\' first.\n");
         } else {
             multicore_fifo_push_blocking(0);
-            set_status(RUNNING);
             printf("OK\n");
             // } else if (strncmp(readstring, "hwstart", 5) == 0) {
             //     multicore_fifo_push_blocking(1);

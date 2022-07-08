@@ -10,6 +10,11 @@ Raspberry Pi Pico interface for the AD9959 DDS
 ## Testing
 - large number of instructions
 - different types of sweeps back to back to back to back
+    up - up
+    up - down
+    down - up
+    down - down
+    
 
 ## Notes
 The frequency resolution of the AD9959 is 
