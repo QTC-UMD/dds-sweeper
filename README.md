@@ -1,6 +1,16 @@
 # dds-sweeper
 Raspberry Pi Pico interface for the AD9959 DDS
 
+## TODO
+- multichannel support
+- external clock mode
+- self timed mode
+
+
+## Testing
+- large number of instructions
+- different types of sweeps back to back to back to back
+
 ## Notes
 The frequency resolution of the AD9959 is 
 $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\sim 0.1164$ Hz. Any frequency input to the dds-sweeper will be rounded to an integer multiple of the frequency resolution.
@@ -84,14 +94,3 @@ Reconfigures the source/reference clock.
 
 
 * ``:  
-
-
-## TODO
-- multichannel support
-- change clock settings
-- self timed mode
-
-
-## Testing
-
-- large number of instructions
