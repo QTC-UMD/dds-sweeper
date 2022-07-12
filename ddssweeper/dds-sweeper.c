@@ -36,8 +36,8 @@ int status = STOPPED;
 
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
-#define TRIG_UP 0b11111111
-#define TRIG_DOWN 0b00001111
+
+#define MAX_SIZE 20000
 
 // ============================================================================
 // global variables
@@ -56,7 +56,7 @@ bool DEBUG = true;
 uint triggers;
 
 uint INS_SIZE = 0;
-uint8_t instructions[20000];
+uint8_t instructions[MAX_SIZE];
 
 // ============================================================================
 // Setup
@@ -255,7 +255,9 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
     ins[18] = 0x0a;
     ins[23] = 0x03;
 
-    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+    int channel_offset = channel * (MAX_SIZE / ad9959.channels);
+
+    memcpy(instructions + channel_offset + (addr * INS_SIZE), ins, INS_SIZE);
 }
 
 void set_freq(uint channel, uint addr, double s0, double e0, double rate,
@@ -314,7 +316,9 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     memcpy(ins + 2, (uint8_t*)&lower, 4);
     memcpy(ins + 20, (uint8_t*)&higher, 4);
 
-    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+    int channel_offset = channel * (MAX_SIZE / ad9959.channels);
+
+    memcpy(instructions + channel_offset + (addr * INS_SIZE), ins, INS_SIZE);
 
     printf("Instruction #%d: ", addr);
     for (int i = 0; i < INS_SIZE; i++) {
@@ -345,12 +349,20 @@ void background() {
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
 
-            // printf("transferring: %d\n", i);
+            uint8_t pio = instructions[offset];
 
-            spi_write_blocking(ad9959.spi, instructions + offset + 1,
-                               INS_SIZE - 1);
-            pio_sm_put(trig.pio, trig.sm, instructions[offset]);
+            for (int j = 0; j < ad9959.channels; j++) {
+                int channel_offset = j * (MAX_SIZE / ad9959.channels);
 
+                uint8_t channel_select[] = {0x00, 0x02 | (1u << (j + 4))};
+                spi_write_blocking(ad9959.spi, channel_select, 2);
+
+                spi_write_blocking(ad9959.spi,
+                                   instructions + channel_offset + offset + 1,
+                                   INS_SIZE - 1);
+            }
+
+            pio_sm_put(trig.pio, trig.sm, pio);
             wait(0);
         }
         pio_sm_clear_fifos(trig.pio, trig.sm);
