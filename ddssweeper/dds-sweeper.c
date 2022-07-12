@@ -36,8 +36,8 @@ int status = STOPPED;
 
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
-#define TRIG_UP 3
-#define TRIG_DOWN 5
+#define TRIG_UP 0b11111111
+#define TRIG_DOWN 0b00001111
 
 // ============================================================================
 // global variables
@@ -222,7 +222,7 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         // UP SWEEP
         lower = (uint32_t)s0;
         higher = (uint32_t)e0;
-        ins[0] = TRIG_UP;
+        ins[0] = ad9959.channel_mask | (ad9959.channel_mask << 4);
         memcpy(ins + 9, (uint8_t*)&atw, 4);
         memcpy(ins + 14, "\xff\xc0\x00\x00", 4);
 
@@ -234,7 +234,7 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         // SWEEP DOWN
         lower = (uint32_t)e0;
         higher = (uint32_t)s0;
-        ins[0] = TRIG_DOWN;
+        ins[0] = ad9959.channel_mask;
         memcpy(ins + 9, "\xff\xc0\x00\x00", 4);
         memcpy(ins + 14, (uint8_t*)&atw, 4);
 
@@ -294,7 +294,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
 
     if (s0 <= e0) {
         // sweep up
-        ins[0] = TRIG_UP;
+        ins[0] = ad9959.channel_mask | (ad9959.channel_mask << 4);
         lower = sword;
         higher = eword;
         memcpy(ins + 10, (uint8_t*)&rword, 4);
@@ -302,7 +302,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
         memcpy(ins + 25, "\x80\x43\x10", 3);
     } else {
         // sweep down
-        ins[0] = TRIG_DOWN;
+        ins[0] = ad9959.channel_mask;
         ins[8] = 0x01;
         lower = eword;
         higher = sword;
@@ -322,10 +322,6 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     }
     printf("\n");
 }
-
-
-
-
 
 // ============================================================================
 // Main Tasks
@@ -405,6 +401,26 @@ void loop() {
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         ad9959_read_all(&ad9959);
         printf("ok\n");
+    } else if (strncmp(readstring, "setchannels", 11) == 0) {
+        uint c0, c1, c2, c3;
+
+        int parsed = sscanf(readstring, "%*s %u %u %u %u", &c0, &c1, &c2, &c3);
+
+        if (parsed < 4) {
+            printf("bad setchannels command\n");
+        } else {
+            ad9959.channels = c0 + c1 + c2 + c3;
+            if (ad9959.channels == 1) {
+                ad9959.channel_mask = 0xf;
+            } else {
+                // TODO: add more validation?
+                ad9959.channel_mask =
+                    (c0 << 0) | (c1 << 1) | (c2 << 2) | (c3 << 3);
+            }
+            printf("Channels: %u\nChannel Mask: %01x\n", ad9959.channels,
+                   ad9959.channel_mask);
+            printf("ok\n");
+        }
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
         // setfreq <channel:int> <frequency:float>
 
@@ -631,7 +647,7 @@ int main() {
     trig.pio = pio0;
     trig.sm = pio_claim_unused_sm(pio0, true);
     trig.offset = pio_add_program(pio0, &trigger_program);
-    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P3, PIN_UPDATE);
+    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P0, PIN_UPDATE);
 
     init_pin(TRIGGER);
 
