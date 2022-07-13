@@ -277,7 +277,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
-    uint channel_offset = (INS_SIZE + csrs) * channel;
+    uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
     if (rate == 0) {
         instructions[offset - 1] = 0x00;
