@@ -206,8 +206,12 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
     uint8_t ins[30];
     uint32_t higher, lower, atw;
 
+    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
+    uint channel_offset = (INS_SIZE + csrs) * channel;
+
     if (rate == 0) {
-        memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
+        instructions[offset - 1] = 0x00;
         return;
     }
 
@@ -223,40 +227,47 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         // UP SWEEP
         lower = (uint32_t)s0;
         higher = (uint32_t)e0;
-        memcpy(ins + 9, (uint8_t*)&atw, 4);
-        memcpy(ins + 14, "\xff\xc0\x00\x00", 4);
+        instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
+        memcpy(ins + 8, (uint8_t*)&atw, 4);
+        memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
 
-        ins[6] = 0x01;
-        ins[7] = div;
+        ins[5] = 0x01;
+        ins[6] = div;
 
-        memcpy(ins + 24, "\x40\x43\x10", 3);
+        memcpy(ins + 23, "\x40\x43\x10", 3);
     } else {
         // SWEEP DOWN
         lower = (uint32_t)e0;
         higher = (uint32_t)s0;
-        memcpy(ins + 9, "\xff\xc0\x00\x00", 4);
-        memcpy(ins + 14, (uint8_t*)&atw, 4);
+        instructions[offset - 1] &= ~(1u << (channel + 4));
+        instructions[offset - 1] |= 1u << channel;
+        memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
+        memcpy(ins + 13, (uint8_t*)&atw, 4);
 
-        ins[6] = div;
-        ins[7] = 0x01;
+        ins[5] = div;
+        ins[6] = 0x01;
 
-        memcpy(ins + 24, "\x40\x43\x00", 3);
+        memcpy(ins + 23, "\x40\x43\x00", 3);
     }
     lower = ((lower & 0xff) << 16) | (lower & 0xff00);
     higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
-    memcpy(ins + 2, (uint8_t*)&lower, 3);
-    memcpy(ins + 19, (uint8_t*)&higher, 4);
+    memcpy(ins + 1, (uint8_t*)&lower, 3);
+    memcpy(ins + 18, (uint8_t*)&higher, 4);
 
-    ins[1] = 0x06;
-    ins[5] = 0x07;
-    ins[8] = 0x08;
-    ins[13] = 0x09;
-    ins[18] = 0x0a;
-    ins[23] = 0x03;
+    ins[0] = 0x06;
+    ins[4] = 0x07;
+    ins[7] = 0x08;
+    ins[12] = 0x09;
+    ins[17] = 0x0a;
+    ins[22] = 0x03;
 
-    int channel_offset = channel * (MAX_SIZE / ad9959.channels);
+    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
-    memcpy(instructions + channel_offset + (addr * INS_SIZE), ins, INS_SIZE);
+    if (ad9959.channels > 1) {
+        uint8_t csr[] = {
+            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
+        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
+    }
 }
 
 void set_freq(uint channel, uint addr, double s0, double e0, double rate,
@@ -269,7 +280,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     uint channel_offset = (INS_SIZE + csrs) * channel;
 
     if (rate == 0) {
-        memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
+        instructions[offset - 1] = 0x00;
         return;
     }
 
@@ -323,15 +334,16 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
     if (ad9959.channels > 1) {
-        uint8_t csr[] = {0x00, 0x02 | (1u << (((channel + 1) % 4) + 4))};
+        uint8_t csr[] = {
+            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
         memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
     }
 
-    printf("Instruction #%d: ", addr);
-    for (int i = 0; i < INS_SIZE; i++) {
-        printf("%02x ", ins[i]);
-    }
-    printf("\n");
+    // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
+    // channel_offset); for (int i = 0; i < INS_SIZE; i++) {
+    //     printf("%02x ", ins[i]);
+    // }
+    // printf("\n");
 }
 
 // ============================================================================
@@ -349,20 +361,13 @@ void background() {
         triggers = 0;
         set_status(RUNNING);
 
-        printf("\n*************\n");
-        for (int j = 0; j < 100; j++) {
-            printf("%02x ", instructions[j]);
-        }
-        printf("\n*************\n");
-
         int i = 0;
-            uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+        uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         while (get_status() != ABORTING) {
             uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
 
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
-
 
             if (ad9959.channels > 1) {
                 spi_write_blocking(ad9959.spi, instructions + offset + 1,
