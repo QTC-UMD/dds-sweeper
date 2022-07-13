@@ -16,7 +16,8 @@
 #define PIN_MISO 12
 #define PIN_MOSI 15
 #define PIN_SCK 14
-#define PIN_RESET 20
+#define PIN_RESET 9
+#define PIN_CLOCK 21
 #define PIN_UPDATE 22
 #define P0 16
 #define P1 17
@@ -222,7 +223,6 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         // UP SWEEP
         lower = (uint32_t)s0;
         higher = (uint32_t)e0;
-        ins[0] = ad9959.channel_mask | (ad9959.channel_mask << 4);
         memcpy(ins + 9, (uint8_t*)&atw, 4);
         memcpy(ins + 14, "\xff\xc0\x00\x00", 4);
 
@@ -234,7 +234,6 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         // SWEEP DOWN
         lower = (uint32_t)e0;
         higher = (uint32_t)s0;
-        ins[0] = ad9959.channel_mask;
         memcpy(ins + 9, "\xff\xc0\x00\x00", 4);
         memcpy(ins + 14, (uint8_t*)&atw, 4);
 
@@ -265,6 +264,10 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     uint8_t ins[30];
     uint32_t higher, lower, ftw;
 
+    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
+    uint channel_offset = (INS_SIZE + csrs) * channel;
+
     if (rate == 0) {
         memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
         return;
@@ -285,40 +288,44 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
             ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
 
-    ins[1] = 0x04;
-    ins[6] = 0x07;
+    ins[0] = 0x04;
+    ins[5] = 0x07;
+    ins[6] = div;
     ins[7] = div;
-    ins[8] = div;
-    ins[9] = 0x08;
-    ins[14] = 0x09;
-    ins[19] = 0x0a;
-    ins[24] = 0x03;
+    ins[8] = 0x08;
+    ins[13] = 0x09;
+    ins[18] = 0x0a;
+    ins[23] = 0x03;
 
     if (s0 <= e0) {
         // sweep up
-        ins[0] = ad9959.channel_mask | (ad9959.channel_mask << 4);
         lower = sword;
         higher = eword;
-        memcpy(ins + 10, (uint8_t*)&rword, 4);
-        memcpy(ins + 15, "\x00\x00\x00\x00", 4);
-        memcpy(ins + 25, "\x80\x43\x10", 3);
+        instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
+        memcpy(ins + 9, (uint8_t*)&rword, 4);
+        memcpy(ins + 14, "\x00\x00\x00\x00", 4);
+        memcpy(ins + 24, "\x80\x43\x10", 3);
     } else {
         // sweep down
-        ins[0] = ad9959.channel_mask;
-        ins[8] = 0x01;
+        ins[7] = 0x01;
         lower = eword;
         higher = sword;
-        memcpy(ins + 10, "\xff\xff\xff\xff", 4);
-        memcpy(ins + 15, (uint8_t*)&rword, 4);
-        memcpy(ins + 25, "\x80\x43\x00", 3);
+        instructions[offset - 1] &= ~(1u << (channel + 4));
+        instructions[offset - 1] |= 1u << channel;
+        memcpy(ins + 9, "\xff\xff\xff\xff", 4);
+        memcpy(ins + 14, (uint8_t*)&rword, 4);
+        memcpy(ins + 24, "\x80\x43\x00", 3);
     }
 
-    memcpy(ins + 2, (uint8_t*)&lower, 4);
-    memcpy(ins + 20, (uint8_t*)&higher, 4);
+    memcpy(ins + 1, (uint8_t*)&lower, 4);
+    memcpy(ins + 19, (uint8_t*)&higher, 4);
 
-    int channel_offset = channel * (MAX_SIZE / ad9959.channels);
+    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
-    memcpy(instructions + channel_offset + (addr * INS_SIZE), ins, INS_SIZE);
+    if (ad9959.channels > 1) {
+        uint8_t csr[] = {0x00, 0x02 | (1u << (((channel + 1) % 4) + 4))};
+        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
+    }
 
     printf("Instruction #%d: ", addr);
     for (int i = 0; i < INS_SIZE; i++) {
@@ -342,32 +349,30 @@ void background() {
         triggers = 0;
         set_status(RUNNING);
 
+        printf("\n*************\n");
+        for (int j = 0; j < 100; j++) {
+            printf("%02x ", instructions[j]);
+        }
+        printf("\n*************\n");
+
         int i = 0;
+            uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         while (get_status() != ABORTING) {
-            uint offset = INS_SIZE * (i++);
+            uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
 
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
 
-            uint8_t pio = instructions[offset];
 
             if (ad9959.channels > 1) {
-                for (int j = 0; j < ad9959.channels; j++) {
-                    int channel_offset = j * (MAX_SIZE / ad9959.channels);
-
-                    uint8_t channel_select[] = {0x00, 0x02 | (1u << (j + 4))};
-                    spi_write_blocking(ad9959.spi, channel_select, 2);
-
-                    spi_write_blocking(
-                        ad9959.spi, instructions + channel_offset + offset + 1,
-                        INS_SIZE - 1);
-                }
+                spi_write_blocking(ad9959.spi, instructions + offset + 1,
+                                   (INS_SIZE + 2) * ad9959.channels);
             } else {
                 spi_write_blocking(ad9959.spi, instructions + offset + 1,
-                                   INS_SIZE - 1);
+                                   INS_SIZE);
             }
 
-            pio_sm_put(trig.pio, trig.sm, pio);
+            pio_sm_put(trig.pio, trig.sm, instructions[offset]);
             wait(0);
         }
         pio_sm_clear_fifos(trig.pio, trig.sm);
@@ -419,23 +424,14 @@ void loop() {
         ad9959_read_all(&ad9959);
         printf("ok\n");
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
-        uint c0, c1, c2, c3;
+        uint channels;
 
-        int parsed = sscanf(readstring, "%*s %u %u %u %u", &c0, &c1, &c2, &c3);
+        int parsed = sscanf(readstring, "%*s %u", &channels);
 
-        if (parsed < 4) {
+        if (parsed < 1) {
             printf("bad setchannels command\n");
         } else {
-            ad9959.channels = c0 + c1 + c2 + c3;
-            if (ad9959.channels == 1) {
-                ad9959.channel_mask = 0xf;
-            } else {
-                // TODO: add more validation?
-                ad9959.channel_mask =
-                    (c0 << 0) | (c1 << 1) | (c2 << 2) | (c3 << 3);
-            }
-            printf("Channels: %u\nChannel Mask: %01x\n", ad9959.channels,
-                   ad9959.channel_mask);
+            ad9959.channels = channels;
             printf("ok\n");
         }
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
@@ -550,7 +546,7 @@ void loop() {
         } else if (type > 3) {
             printf("Invalid Command - table type must be in range 0-3\n");
         } else {
-            uint8_t sizes[] = {6, 27, 28, 0};
+            uint8_t sizes[] = {5, 26, 27, 0};
             INS_SIZE = sizes[type];
             ad9959_config_mode(&ad9959, type, 0);
             printf("OK\n");
@@ -636,7 +632,7 @@ int main() {
                     CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
     // output system clock on pin 21
-    clock_gpio_init(21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
+    clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
     // enable clock resus if external sys clock is lost
     clocks_enable_resus(&resus_callback);
 
@@ -675,7 +671,7 @@ int main() {
     stdio_init_all();
     stdio_init_all();
 
-    memset(instructions, 0, 100);
+    memset(instructions, 0, MAX_SIZE);
 
     printf("\n==================================\n");
 

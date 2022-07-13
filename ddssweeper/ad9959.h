@@ -27,7 +27,7 @@ typedef struct ad9959_config {
     double ref_clk;
     uint32_t pll_mult;
     int sweep_type;
-    uint channels, channel_mask;
+    uint channels;
 } ad9959_config;
 
 ad9959_config ad9959_get_default_config();
