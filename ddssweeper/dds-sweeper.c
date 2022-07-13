@@ -351,14 +351,19 @@ void background() {
 
             uint8_t pio = instructions[offset];
 
-            for (int j = 0; j < ad9959.channels; j++) {
-                int channel_offset = j * (MAX_SIZE / ad9959.channels);
+            if (ad9959.channels > 1) {
+                for (int j = 0; j < ad9959.channels; j++) {
+                    int channel_offset = j * (MAX_SIZE / ad9959.channels);
 
-                uint8_t channel_select[] = {0x00, 0x02 | (1u << (j + 4))};
-                spi_write_blocking(ad9959.spi, channel_select, 2);
+                    uint8_t channel_select[] = {0x00, 0x02 | (1u << (j + 4))};
+                    spi_write_blocking(ad9959.spi, channel_select, 2);
 
-                spi_write_blocking(ad9959.spi,
-                                   instructions + channel_offset + offset + 1,
+                    spi_write_blocking(
+                        ad9959.spi, instructions + channel_offset + offset + 1,
+                        INS_SIZE - 1);
+                }
+            } else {
+                spi_write_blocking(ad9959.spi, instructions + offset + 1,
                                    INS_SIZE - 1);
             }
 
