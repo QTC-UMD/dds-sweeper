@@ -35,6 +35,8 @@ ad9959_config ad9959_get_default_config() {
     c.sweep_type = -1;
     c.spi = spi1;
 
+    c.channels = 1;
+
     return c;
 }
 
