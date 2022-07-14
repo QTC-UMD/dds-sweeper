@@ -17,10 +17,27 @@ trigger:
     push                
  
 
+
+
+.program timer
+
+.side_set 1
+
+    pull block      side 0
+    mov x, osr      side 1
+    nop             side 1 [6]
+
+loop:
+    jmp x-- loop    side 0
+        
+
+
+
 % c-sdk {
 
     static inline void trigger_program_init(PIO pio, uint sm, uint offset, 
-        uint trigger_pin, 
+        uint trigger_pin,
+        uint soft_trig, 
         uint p_pin, 
         uint update_pin
     ) {
@@ -30,11 +47,12 @@ trigger:
         pio_gpio_init(pio, p_pin + 2);
         pio_gpio_init(pio, p_pin + 3);
         pio_gpio_init(pio, update_pin);
-        pio_gpio_init(pio, trigger_pin);
+        pio_gpio_init(pio, trigger_pin); 
+        pio_gpio_init(pio, soft_trig); 
 
         pio_sm_set_pindirs_with_mask(pio, sm,
-            (0xf << p_pin) | (1u << update_pin) | (1u << trigger_pin),    
-            (0xf << p_pin) | (1u << update_pin) | (0u << trigger_pin)    
+            (0xf << p_pin) | (1u << update_pin) | (1u << trigger_pin)| (1u << soft_trig),    
+            (0xf << p_pin) | (1u << update_pin) | (0u << trigger_pin)| (0u << soft_trig)    
         );
 
         pio_sm_config c = trigger_program_get_default_config(offset);
@@ -52,6 +70,29 @@ trigger:
 
         pio_sm_set_enabled(pio, sm, true);
  
+    }
+
+    static inline void timer_program_init(PIO pio, uint sm, uint offset,
+        uint trigger_pin
+    ) {
+        pio_sm_config c = timer_program_get_default_config(offset);
+    
+
+        pio_gpio_init(pio, trigger_pin);
+        pio_sm_set_pindirs_with_mask(pio, sm, 
+            (1u << trigger_pin),
+            (1u << trigger_pin)
+        );
+        sm_config_set_sideset_pins(&c, trigger_pin);
+
+        sm_config_set_out_shift(&c, true, false, 1);
+        sm_config_set_in_shift(&c, true, true, 1);
+
+        sm_config_set_clkdiv(&c, 1.f);
+
+        pio_sm_init(pio, sm, offset, &c);
+        pio_sm_set_enabled(pio, sm, true);
+
     }
 
 %}

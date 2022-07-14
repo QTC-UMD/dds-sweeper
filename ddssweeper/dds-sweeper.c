@@ -3,6 +3,7 @@
 
 #include "ad9959.h"
 #include "hardware/clocks.h"
+#include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "hardware/pll.h"
 #include "hardware/spi.h"
@@ -16,7 +17,7 @@
 #define PIN_MISO 12
 #define PIN_MOSI 15
 #define PIN_SCK 14
-#define PIN_RESET 9
+#define PIN_RESET 11
 #define PIN_CLOCK 21
 #define PIN_UPDATE 22
 #define P0 16
@@ -166,8 +167,8 @@ void abort_run() {
     if (get_status() == RUNNING) {
         set_status(ABORTING);
 
-        gpio_put(TRIGGER, 1);
-        gpio_put(TRIGGER, 0);
+        // use the time pio to hit the trigger
+        pio_sm_put(pio1, 0, 10);
     }
 }
 
@@ -630,6 +631,21 @@ void loop() {
             //     set_status(RUNNING);
             //     printf("OK\n");
         }
+    } else if (strncmp(readstring, "hwstart", 7) == 0) {
+        if (ad9959.sweep_type == -1) {
+            printf("Please select an operating mode using \'mode\' first.\n");
+        } else {
+            multicore_fifo_push_blocking(0);
+            printf("OK\n");
+
+            uint32_t wats[] = {4000, 4000, 0};
+
+            uint dma = dma_claim_unused_channel(true);
+            dma_channel_config c = dma_channel_get_default_config(dma);
+            channel_config_set_dreq(&c, DREQ_PIO1_TX0);
+            channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+            dma_channel_configure(dma, &c, &pio1->txf[0], wats, 3, true);
+        }
     } else {
         printf("Unrecognized command: \"%s\"\n", readstring);
     }
@@ -638,6 +654,7 @@ void loop() {
 int main() {
     // set sysclock to default 125 MHz
     set_sys_clock_khz(125 * MHZ / 1000, false);
+
     // have SPI clock follow the system clock for max speed
     clock_configure(clk_peri, 0,
                     CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
@@ -671,9 +688,11 @@ int main() {
     trig.pio = pio0;
     trig.sm = pio_claim_unused_sm(pio0, true);
     trig.offset = pio_add_program(pio0, &trigger_program);
-    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, P0, PIN_UPDATE);
+    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, 9, P0,
+                         PIN_UPDATE);
 
-    init_pin(TRIGGER);
+    uint offset = pio_add_program(pio1, &timer_program);
+    timer_program_init(pio1, 0, offset, TRIGGER);
 
     // put chip in a known state
     init_pin(PIN_RESET);
