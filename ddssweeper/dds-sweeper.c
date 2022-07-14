@@ -504,7 +504,7 @@ void loop() {
             printf("ok\n");
         }
     } else if (strncmp(readstring, "setclock", 8) == 0) {
-        uint src;   // 0 = internal, 1=GPIO pin 20, 2=GPIO pin 22
+        uint src;   // 0 = internal, 1 = external
         uint freq;  // in Hz (up to 133 MHz)
         int parsed = sscanf(readstring, "%*s %u %u", &src, &freq);
         if (parsed < 2) {
@@ -513,7 +513,7 @@ void loop() {
             if (DEBUG) {
                 printf("Got request mode=%u, freq=%u MHz\n", src, freq / MHZ);
             }
-            if (src > 2) {
+            if (src > 1) {
                 printf("invalid request\n");
             } else {
                 // Set new clock frequency
@@ -521,6 +521,13 @@ void loop() {
                     if (set_sys_clock_khz(freq / 1000, false)) {
                         ad9959.ref_clk = freq;
                         ad9959.sys_clk = freq * ad9959.pll_mult;
+                        clock_configure(
+                            clk_peri, 0,
+                            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
+                            125 * MHZ, 125 * MHZ);
+                        clock_gpio_init(
+                            PIN_CLOCK,
+                            CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
                         stdio_init_all();
                         printf("ok\n");
                         // clock_status = INTERNAL;
@@ -530,10 +537,9 @@ void loop() {
                             "frequency.");
                     }
                 } else {
-                    // clock_configure_gpin(clk_sys, (src == 2 ? 22 : 20), freq,
-                    //                      freq);
-                    // // update clock status
-                    // clock_status = EXTERNAL;
+                    ad9959.ref_clk = freq;
+                    ad9959.sys_clk = freq * ad9959.pll_mult;
+                    gpio_deinit(PIN_CLOCK);
                     printf("not implemented yet\n");
                 }
             }

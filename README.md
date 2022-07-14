@@ -81,6 +81,7 @@ Sets the pll multiplerier the AD9959 uses to get the from the reference clock to
 * `setclock <mode:int> <freq:int>`:  
 Reconfigures the source/reference clock.
   - Mode `0`: Use pico system clock as reference to the AD9959
+  - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico
 
 * `setchannels <channel0:int> <channel1:int> <channel2:int> <channel3:int>`:  
 Sets the which channels are active or inactive. You should set the lowest combo of channels you need. Input should be 0 or 1 only.
