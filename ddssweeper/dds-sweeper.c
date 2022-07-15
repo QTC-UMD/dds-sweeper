@@ -5,7 +5,6 @@
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/pio.h"
-#include "hardware/pll.h"
 #include "hardware/spi.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -39,7 +38,8 @@ int status = STOPPED;
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 
-#define MAX_SIZE 20000
+#define MAX_SIZE 250000
+#define TIMING_OFFSET 187500
 
 // ============================================================================
 // global variables
@@ -54,8 +54,11 @@ pio_sm trig;
 ad9959_config ad9959;
 char readstring[256];
 bool DEBUG = true;
+bool timing = false;
 
 uint triggers;
+
+uint dma;
 
 uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
@@ -105,25 +108,6 @@ void measure_freqs(void) {
     printf("clk_usb = %dkHz\n", f_clk_usb);
     printf("clk_adc = %dkHz\n", f_clk_adc);
     printf("clk_rtc = %dkHz\n", f_clk_rtc);
-}
-
-void resus_callback(void) {
-    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
-    // License
-    // Reconfigure PLL sys back to the default state of 1500 / 6 / 2 = 125MHz
-    pll_init(pll_sys, 1, 1500 * MHZ, 6, 2);
-
-    // CLK SYS = PLL SYS (125MHz) / 1 = 125MHz
-    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-                    CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
-                    125 * MHZ);
-
-    // Reconfigure IO
-    stdio_init_all();
-    printf("Resus event fired\n");
-
-    // Wait for uart output to finish
-    uart_default_tx_wait_blocking();
 }
 
 void readline() {
@@ -191,7 +175,7 @@ void set_tone(uint channel, uint addr, double freq) {
     ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
           ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
 
-    memcpy(ins + 2, (uint8_t*)&ftw, 4);
+    memcpy(ins + 2, (uint8_t *)&ftw, 4);
 
     memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
 
@@ -229,7 +213,7 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         lower = (uint32_t)s0;
         higher = (uint32_t)e0;
         instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 8, (uint8_t*)&atw, 4);
+        memcpy(ins + 8, (uint8_t *)&atw, 4);
         memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
 
         ins[5] = 0x01;
@@ -243,7 +227,7 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         instructions[offset - 1] &= ~(1u << (channel + 4));
         instructions[offset - 1] |= 1u << channel;
         memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
-        memcpy(ins + 13, (uint8_t*)&atw, 4);
+        memcpy(ins + 13, (uint8_t *)&atw, 4);
 
         ins[5] = div;
         ins[6] = 0x01;
@@ -252,8 +236,8 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
     }
     lower = ((lower & 0xff) << 16) | (lower & 0xff00);
     higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
-    memcpy(ins + 1, (uint8_t*)&lower, 3);
-    memcpy(ins + 18, (uint8_t*)&higher, 4);
+    memcpy(ins + 1, (uint8_t *)&lower, 3);
+    memcpy(ins + 18, (uint8_t *)&higher, 4);
 
     ins[0] = 0x06;
     ins[4] = 0x07;
@@ -314,7 +298,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
         lower = sword;
         higher = eword;
         instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 9, (uint8_t*)&rword, 4);
+        memcpy(ins + 9, (uint8_t *)&rword, 4);
         memcpy(ins + 14, "\x00\x00\x00\x00", 4);
         memcpy(ins + 24, "\x80\x43\x10", 3);
     } else {
@@ -325,12 +309,12 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
         instructions[offset - 1] &= ~(1u << (channel + 4));
         instructions[offset - 1] |= 1u << channel;
         memcpy(ins + 9, "\xff\xff\xff\xff", 4);
-        memcpy(ins + 14, (uint8_t*)&rword, 4);
+        memcpy(ins + 14, (uint8_t *)&rword, 4);
         memcpy(ins + 24, "\x80\x43\x00", 3);
     }
 
-    memcpy(ins + 1, (uint8_t*)&lower, 4);
-    memcpy(ins + 19, (uint8_t*)&higher, 4);
+    memcpy(ins + 1, (uint8_t *)&lower, 4);
+    memcpy(ins + 19, (uint8_t *)&higher, 4);
 
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
@@ -379,9 +363,16 @@ void background() {
             }
 
             pio_sm_put(trig.pio, trig.sm, instructions[offset]);
+
+            if (i == 1 && timing) {
+                multicore_fifo_push_blocking(1);
+            }
+
             wait(0);
         }
+        dma_channel_abort(dma);
         pio_sm_clear_fifos(trig.pio, trig.sm);
+        pio_sm_clear_fifos(pio1, 0);
         set_status(STOPPED);
     }
 }
@@ -546,39 +537,47 @@ void loop() {
             }
         }
     } else if (strncmp(readstring, "mode", 4) == 0) {
-        // config <type:int>
+        // mode <type:int> <timing:int>
 
-        uint type;
-        int parsed = sscanf(readstring, "%*s %u", &type);
+        uint type, _timing;
+        int parsed = sscanf(readstring, "%*s %u %u %u", &type, &_timing);
 
-        if (parsed < 1) {
+        if (parsed < 2) {
             printf(
-                "Invalid Command - too few arguments - expected: config "
-                "<type:int> <no dwell:int>\n");
+                "Invalid Command - too few arguments - expected: mode "
+                "<type:int> <timing:int>\n");
         } else if (type > 3) {
             printf("Invalid Command - table type must be in range 0-3\n");
         } else {
             uint8_t sizes[] = {5, 26, 27, 0};
             INS_SIZE = sizes[type];
             ad9959_config_mode(&ad9959, type, 0);
+            timing = _timing;
             printf("OK\n");
         }
 
     } else if (strncmp(readstring, "set ", 4) == 0) {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
-        // <rate:double>
+        // <rate:double> <time:int>
 
         if (ad9959.sweep_type == 0) {
             // SINGLE TONE MODE
             uint channel, addr;
+            uint32_t time;
             double freq;
-            int parsed =
-                sscanf(readstring, "%*s %u %u %lf", &channel, &addr, &freq);
+            int parsed = sscanf(readstring, "%*s %u %u %lf %u", &channel, &addr,
+                                &freq, &time);
 
-            if (parsed < 3) {
-                printf("Invalid Command - expected: \n");
+            if (!timing && parsed < 3) {
+                printf("Invalid Command - expected: set <> <>\n");
+            } else if (timing && parsed < 4) {
+                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
             } else {
                 set_tone(channel, addr, freq);
+                if (timing) {
+                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
+                        time - 10;
+                }
             }
 
         } else if (ad9959.sweep_type == 1) {
@@ -586,14 +585,22 @@ void loop() {
             // set <channel:int> <addr:int> <start_point:double>
             // <end_point:double> <rate:double> <div:int>
             uint channel, addr, div;
+            uint32_t time;
             double start, end, rate;
-            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
-                                &channel, &addr, &start, &end, &rate, &div);
+            int parsed =
+                sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel,
+                       &addr, &start, &end, &rate, &div, &time);
 
             if (parsed < 6) {
                 printf("Invalid Command - expected: \n");
+            } else if (timing && parsed < 7) {
+                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
             } else {
                 set_amp(channel, addr, start, end, rate, div);
+                if (timing) {
+                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
+                        time - 10;
+                }
             }
 
         } else if (ad9959.sweep_type == 2) {
@@ -601,14 +608,22 @@ void loop() {
             // set <channel:int> <addr:int> <start_point:double>
             // <end_point:double> <rate:double> <div:int>
             uint channel, addr, div;
+            uint32_t time;
             double start, end, rate;
-            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
-                                &channel, &addr, &start, &end, &rate, &div);
+            int parsed =
+                sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel,
+                       &addr, &start, &end, &rate, &div, &time);
 
             if (parsed < 6) {
                 printf("Invalid Command - expected: \n");
+            } else if (timing && parsed < 7) {
+                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
             } else {
                 set_freq(channel, addr, start, end, rate, div);
+                if (timing) {
+                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
+                        time - 10;
+                }
             }
 
         } else if (ad9959.sweep_type == 3) {
@@ -625,26 +640,19 @@ void loop() {
             printf("Please select an operating mode using \'mode\' first.\n");
         } else {
             multicore_fifo_push_blocking(0);
-            printf("OK\n");
-            // } else if (strncmp(readstring, "hwstart", 5) == 0) {
-            //     multicore_fifo_push_blocking(1);
-            //     set_status(RUNNING);
-            //     printf("OK\n");
-        }
-    } else if (strncmp(readstring, "hwstart", 7) == 0) {
-        if (ad9959.sweep_type == -1) {
-            printf("Please select an operating mode using \'mode\' first.\n");
-        } else {
-            multicore_fifo_push_blocking(0);
-            printf("OK\n");
 
-            uint32_t wats[] = {4000, 4000, 0};
+            if (timing) {
+                multicore_fifo_pop_blocking();
+                // uint32_t wats[] = {4000, 4000, 0};
+                dma_channel_config c = dma_channel_get_default_config(dma);
+                channel_config_set_dreq(&c, DREQ_PIO1_TX0);
+                channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+                dma_channel_configure(dma, &c, &pio1->txf[0],
+                                      instructions + TIMING_OFFSET,
+                                      (MAX_SIZE - TIMING_OFFSET) / 4, true);
+            }
 
-            uint dma = dma_claim_unused_channel(true);
-            dma_channel_config c = dma_channel_get_default_config(dma);
-            channel_config_set_dreq(&c, DREQ_PIO1_TX0);
-            channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-            dma_channel_configure(dma, &c, &pio1->txf[0], wats, 3, true);
+            printf("OK\n");
         }
     } else {
         printf("Unrecognized command: \"%s\"\n", readstring);
@@ -661,8 +669,6 @@ int main() {
                     125 * MHZ);
     // output system clock on pin 21
     clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
-    // enable clock resus if external sys clock is lost
-    clocks_enable_resus(&resus_callback);
 
     // turn on light as indicator that this is working!
     gpio_init(PICO_DEFAULT_LED_PIN);
@@ -693,6 +699,8 @@ int main() {
 
     uint offset = pio_add_program(pio1, &timer_program);
     timer_program_init(pio1, 0, offset, TRIGGER);
+
+    dma = dma_claim_unused_channel(true);
 
     // put chip in a known state
     init_pin(PIN_RESET);
