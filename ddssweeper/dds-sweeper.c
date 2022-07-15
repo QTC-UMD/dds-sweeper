@@ -647,9 +647,11 @@ void loop() {
                 dma_channel_config c = dma_channel_get_default_config(dma);
                 channel_config_set_dreq(&c, DREQ_PIO1_TX0);
                 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+                
+                // make this not hardcoded at 15000?
                 dma_channel_configure(dma, &c, &pio1->txf[0],
                                       instructions + TIMING_OFFSET,
-                                      (MAX_SIZE - TIMING_OFFSET) / 4, true);
+                                      15000, true);
             }
 
             printf("OK\n");
