@@ -59,7 +59,7 @@ Configures what mode the DDS-Sweeper is operating in
   The operating mode must be set before instructions can be programmed into the DDS-Sweeper
 
 
-* `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <div:int>`:  
+* `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <div:int> (<time:int>)`:  
 Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `div` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` differe depending on the operating mode od the DDS-Sweeper  
   - Single Tone Mode (mode 0)
   - Amplitude Sweep (mode 1)  

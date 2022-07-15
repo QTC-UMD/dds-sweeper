@@ -455,30 +455,6 @@ void loop() {
 
             printf("ok\n");
         }
-    } else if (strncmp(readstring, "setamp", 6) == 0) {
-        // setfreq <channel:int> <frequency:float>
-
-        uint channel;
-        double freq;
-        int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
-        if (parsed < 2) {
-            printf(
-                "Invalid Command - too few arguments - expected: setamp "
-                "<channel:int> <amp:double>\n");
-        } else if (channel < 0 || channel > 3) {
-            printf("Invalid Command - channel must be in range 0-3\n");
-        } else {
-            uint64_t word = ad9959_config_amp(&ad9959, channel, freq);
-            ad9959_send_config(&ad9959);
-            update();
-
-            if (DEBUG) {
-                double a = word / 1023.0f;
-                printf("%12lf\n", a);
-            }
-
-            printf("ok\n");
-        }
     } else if (strncmp(readstring, "setmult", 7) == 0) {
         uint mult;
 
@@ -647,11 +623,11 @@ void loop() {
                 dma_channel_config c = dma_channel_get_default_config(dma);
                 channel_config_set_dreq(&c, DREQ_PIO1_TX0);
                 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-                
+
                 // make this not hardcoded at 15000?
                 dma_channel_configure(dma, &c, &pio1->txf[0],
-                                      instructions + TIMING_OFFSET,
-                                      15000, true);
+                                      instructions + TIMING_OFFSET, 15000,
+                                      true);
             }
 
             printf("OK\n");
