@@ -545,6 +545,30 @@ void loop() {
 
             printf("ok\n");
         }
+    // } else if (strncmp(readstring, "setphase", 8) == 0) {
+    //     // setfreq <channel:int> <frequency:float>
+
+    //     uint channel;
+    //     double phase;
+    //     int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
+    //     if (parsed < 2) {
+    //         printf(
+    //             "Invalid Command - too few arguments - expected: setfreq "
+    //             "<channel:int> <frequency:double>\n");
+    //     } else if (channel < 0 || channel > 3) {
+    //         printf("Invalid Command - channel must be in range 0-3\n");
+    //     } else {
+    //         uint64_t word = ad9959_config_phase(&ad9959, channel, phase);
+    //         ad9959_send_config(&ad9959);
+    //         update();
+
+    //         if (DEBUG) {
+    //             double f = word * ad9959.sys_clk / 4294967296.l;
+    //             printf("%12lf\n", f);
+    //         }
+
+    //         printf("ok\n");
+    //     }
     } else if (strncmp(readstring, "setmult", 7) == 0) {
         uint mult;
 

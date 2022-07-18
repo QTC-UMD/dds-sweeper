@@ -15,10 +15,9 @@ ad9959_config ad9959_get_default_config() {
     // nothing in FR2
     memcpy(c.fr2, "\x02\x00\x00", 3);
 
-
     for (int i = 0; i < 4; i++) {
         // select the channel
-        memcpy(c.cfr[i], "\x03\x00\x03\x00", 4);
+        memcpy(c.cfr[i], "\x03\x00\x03\x04", 4);
 
         // all channel registers initialized to zero
         memcpy(c.cftw0[i], "\x04\x00\x00\x00\x00", 5);
@@ -48,11 +47,10 @@ void ad9959_config_mode(ad9959_config* c, uint type, uint no_dwell) {
 
     for (int i = 0; i < 4; i++) {
         c->cfr[i][1] = (type << 6);
-        c->cfr[i][2] = (no_dwell << 7) | ((type ? 1 : 0 )<< 6) | 0b100011;
+        c->cfr[i][2] = (no_dwell << 7) | ((type ? 1 : 0) << 6) | 0b100011;
         c->cfr[i][3] = 0b00010000;
     }
 }
-
 
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
     uint32_t ftw = (uint32_t)round(freq * 4294967296.l / c->sys_clk);
@@ -67,6 +65,21 @@ uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
     return ftw;
 }
 
+// uint32_t ad9959_config_phase(ad9959_config* c, uint channel, double phase) {
+//     uint32_t pow = (uint32_t)round(phase / 360.0 * 16384.0);
+
+//     uint8_t* bytes = (uint8_t*)&pow;
+//     printf("PHASE OFFSET: ");
+//     for (int i = 0; i < 2; i++) {
+//         // 1 offset for the register address
+//         c->cpow0[channel][i + 1] = bytes[1 - i];
+//         printf("%02x ", bytes[1 - i]);
+//     }
+//     printf("\n");
+
+//     // for debugging
+//     return pow;
+// }
 
 uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp) {
     uint32_t atw = (uint16_t)round(amp * 1023);
@@ -147,7 +160,8 @@ void ad9959_read_all(ad9959_config* c) {
         printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
         read(c, 0x04, 4, resp);
-        printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+        printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
+               resp[3]);
 
         read(c, 0x05, 2, resp);
         printf("CPOW: %02x %02x\n", resp[0], resp[1]);
@@ -159,11 +173,12 @@ void ad9959_read_all(ad9959_config* c) {
         printf("LSRR: %02x %02x\n", resp[0], resp[1]);
 
         read(c, 0x08, 4, resp);
-        printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+        printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
+               resp[3]);
 
         read(c, 0x09, 4, resp);
-        printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
-
+        printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
+               resp[3]);
     }
     spi_set_baudrate(spi1, 100 * MHZ);
 }

@@ -36,6 +36,7 @@ void ad9959_config_mode(ad9959_config* c, uint type, uint no_dwell);
 
 void ad9959_config_pll_mult(ad9959_config* c, uint32_t val);
 uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq);
+// uint32_t ad9959_config_phase(ad9959_config* c, uint channel, double phase);
 uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp);
 
 void ad9959_send_config(ad9959_config* c);
