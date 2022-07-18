@@ -160,28 +160,55 @@ void abort_run() {
 // Set Table Instructions
 // ============================================================================
 
-void set_tone(uint channel, uint addr, double freq) {
-    uint8_t ins[10];
+void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
+    uint8_t ins[30];
+    uint32_t ftw, asf, pow;
 
-    if (freq == 0) {
-        memset(instructions + (addr * INS_SIZE), 0, INS_SIZE);
+    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
+    uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
+
+    if (channel == 4) {
+        instructions[offset - 1] = 0x00;
         return;
     }
 
-    ins[0] = 0x04;
-    ins[1] = 0x04;
+    instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
 
-    uint ftw = round(freq / ad9959.sys_clk * 4294967296.0);
+    ins[0] = 0x04;
+    ins[5] = 0x05;
+    ins[8] = 0x06;
+
+    ftw = round(freq / ad9959.sys_clk * 4294967296.0);
     ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
           ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
 
-    memcpy(ins + 2, (uint8_t *)&ftw, 4);
+    asf = round(amp * 1023);
+    if (asf < 1) asf = 1;
+    asf = ((asf & 0xff) << 16) | (asf & 0xff00) | 0x1000;
+    // asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14) | 0x1000;
 
-    memcpy(instructions + (addr * INS_SIZE), ins, INS_SIZE);
+    pow = round(phase / 360.0 * 16384.0);
+    if (pow > 16384 - 1) pow = 16384 - 1;
+    pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
 
-    printf("Instruction %d: ", addr);
-    for (int i = 0; i < 5; i++) {
-        printf("%02x ", *(instructions + addr * INS_SIZE + i));
+    memcpy(ins + 1, (uint8_t *) &ftw, 4);
+    memcpy(ins + 6, (uint8_t *) &pow, 2);
+    memcpy(ins + 9, (uint8_t *) &asf, 3);
+
+
+    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
+
+    if (ad9959.channels > 1) {
+        uint8_t csr[] = {
+            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
+        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
+    }
+
+    printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
+           channel_offset);
+    for (int i = 0; i < INS_SIZE; i++) {
+        printf("%02x ", ins[i]);
     }
     printf("\n");
 }
@@ -189,7 +216,7 @@ void set_tone(uint channel, uint addr, double freq) {
 void set_amp(uint channel, uint addr, double s0, double e0, double rate,
              uint div) {
     uint8_t ins[30];
-    uint32_t higher, lower, atw;
+    uint32_t higher, lower, asf;
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
@@ -202,18 +229,18 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
 
     s0 = round(s0 * 1023);
     e0 = round(e0 * 1023);
-    atw = round(rate * 1023);
+    asf = round(rate * 1023);
 
-    if (atw < 1) atw = 1;
+    if (asf < 1) asf = 1;
 
-    atw = ((atw & 0x3fc) >> 2) | ((atw & 0x3) << 14);
+    asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14);
 
     if (s0 <= e0) {
         // UP SWEEP
         lower = (uint32_t)s0;
         higher = (uint32_t)e0;
         instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 8, (uint8_t *)&atw, 4);
+        memcpy(ins + 8, (uint8_t *)&asf, 4);
         memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
 
         ins[5] = 0x01;
@@ -227,7 +254,7 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
         instructions[offset - 1] &= ~(1u << (channel + 4));
         instructions[offset - 1] |= 1u << channel;
         memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
-        memcpy(ins + 13, (uint8_t *)&atw, 4);
+        memcpy(ins + 13, (uint8_t *)&asf, 4);
 
         ins[5] = div;
         ins[6] = 0x01;
@@ -341,7 +368,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
 void set_phase(uint channel, uint addr, double s0, double e0, double rate,
                uint div) {
     uint8_t ins[30];
-    uint32_t higher, lower, ptw;
+    uint32_t higher, lower, pow;
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
@@ -352,19 +379,17 @@ void set_phase(uint channel, uint addr, double s0, double e0, double rate,
         return;
     }
 
-    // atw = ((atw & 0x3fc) >> 2) | ((atw & 0x3) << 14);
-
     // convert from degrees to tuning words
     s0 = round(s0 / 360.0 * 16384.0);
     e0 = round(e0 / 360.0 * 16384.0);
-    ptw = round(rate / 360.0 * 16384.0);
+    pow = round(rate / 360.0 * 16384.0);
 
-    if (ptw > 16384 - 1) ptw = 16384 - 1;
+    if (pow > 16384 - 1) pow = 16384 - 1;
     if (s0 > 16384 - 1) s0 = 16384 - 1;
     if (e0 > 16384 - 1) e0 = 16384 - 1;
 
     // gross bit shifting to force big endianness
-    ptw = ((ptw & 0x3fc0) >> 6) | ((ptw & 0x3f) << 10);
+    pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
 
     ins[0] = 0x05;
     ins[3] = 0x07;
@@ -379,20 +404,20 @@ void set_phase(uint channel, uint addr, double s0, double e0, double rate,
     if (s0 <= e0) {
         // sweep up
         lower = (uint32_t)s0;
-        higher = (uint32_t) e0;
+        higher = (uint32_t)e0;
         instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 7, (uint8_t *)&ptw, 4);
+        memcpy(ins + 7, (uint8_t *)&pow, 4);
         memcpy(ins + 12, "\x00\x00\x00\x00", 4);
         memcpy(ins + 22, "\xc0\x43\x10", 3);
     } else {
         // sweep down
         ins[7] = 0x01;
-        lower = (uint32_t) e0;
+        lower = (uint32_t)e0;
         higher = (uint32_t)s0;
         instructions[offset - 1] &= ~(1u << (channel + 4));
         instructions[offset - 1] |= 1u << channel;
         memcpy(ins + 7, "\xff\xff\xff\xff", 4);
-        memcpy(ins + 12, (uint8_t *)&ptw, 4);
+        memcpy(ins + 12, (uint8_t *)&pow, 4);
         memcpy(ins + 22, "\xc0\x43\x00", 3);
     }
 
@@ -545,30 +570,31 @@ void loop() {
 
             printf("ok\n");
         }
-    // } else if (strncmp(readstring, "setphase", 8) == 0) {
-    //     // setfreq <channel:int> <frequency:float>
+        // } else if (strncmp(readstring, "setphase", 8) == 0) {
+        //     // setfreq <channel:int> <frequency:float>
 
-    //     uint channel;
-    //     double phase;
-    //     int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
-    //     if (parsed < 2) {
-    //         printf(
-    //             "Invalid Command - too few arguments - expected: setfreq "
-    //             "<channel:int> <frequency:double>\n");
-    //     } else if (channel < 0 || channel > 3) {
-    //         printf("Invalid Command - channel must be in range 0-3\n");
-    //     } else {
-    //         uint64_t word = ad9959_config_phase(&ad9959, channel, phase);
-    //         ad9959_send_config(&ad9959);
-    //         update();
+        //     uint channel;
+        //     double phase;
+        //     int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
+        //     if (parsed < 2) {
+        //         printf(
+        //             "Invalid Command - too few arguments - expected: setfreq
+        //             "
+        //             "<channel:int> <frequency:double>\n");
+        //     } else if (channel < 0 || channel > 3) {
+        //         printf("Invalid Command - channel must be in range 0-3\n");
+        //     } else {
+        //         uint64_t word = ad9959_config_phase(&ad9959, channel, phase);
+        //         ad9959_send_config(&ad9959);
+        //         update();
 
-    //         if (DEBUG) {
-    //             double f = word * ad9959.sys_clk / 4294967296.l;
-    //             printf("%12lf\n", f);
-    //         }
+        //         if (DEBUG) {
+        //             double f = word * ad9959.sys_clk / 4294967296.l;
+        //             printf("%12lf\n", f);
+        //         }
 
-    //         printf("ok\n");
-    //     }
+        //         printf("ok\n");
+        //     }
     } else if (strncmp(readstring, "setmult", 7) == 0) {
         uint mult;
 
@@ -639,7 +665,7 @@ void loop() {
         } else if (type > 3) {
             printf("Invalid Command - table type must be in range 0-3\n");
         } else {
-            uint8_t sizes[] = {5, 26, 27, 25};
+            uint8_t sizes[] = {12, 26, 27, 25};
             INS_SIZE = sizes[type];
             ad9959_config_mode(&ad9959, type, 0);
             timing = _timing;
@@ -654,16 +680,16 @@ void loop() {
             // SINGLE TONE MODE
             uint channel, addr;
             uint32_t time;
-            double freq;
-            int parsed = sscanf(readstring, "%*s %u %u %lf %u", &channel, &addr,
-                                &freq, &time);
+            double freq, amp, phase;
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
+                                &channel, &addr, &freq, &amp, &phase, &time);
 
-            if (!timing && parsed < 3) {
+            if (!timing && parsed < 5) {
                 printf("Invalid Command - expected: set <> <>\n");
-            } else if (timing && parsed < 4) {
+            } else if (timing && parsed < 6) {
                 printf("Invalid Command - expected: set <> <> nbeed a time!\n");
             } else {
-                set_tone(channel, addr, freq);
+                set_tone(channel, addr, freq, amp, phase);
                 if (timing) {
                     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
                         time - 10;
