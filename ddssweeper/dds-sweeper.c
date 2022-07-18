@@ -8,7 +8,7 @@
 #include "hardware/spi.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
-#include "trigger.pio.h"
+#include "trigger_timer.pio.h"
 
 #define VERSION "0.0.0"
 

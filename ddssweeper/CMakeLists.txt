@@ -4,7 +4,7 @@ add_executable(dds-sweeper
         ad9959.h
         )
 
-pico_generate_pio_header(dds-sweeper ${CMAKE_CURRENT_LIST_DIR}/trigger.pio)
+pico_generate_pio_header(dds-sweeper ${CMAKE_CURRENT_LIST_DIR}/trigger_timer.pio)
 
 target_link_libraries(dds-sweeper 
         pico_stdlib
