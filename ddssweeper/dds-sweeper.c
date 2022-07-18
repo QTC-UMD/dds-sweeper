@@ -222,7 +222,7 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + csrs) * channel;
 
-    if (rate == 0) {
+    if (channel == 4) {
         instructions[offset - 1] = 0x00;
         return;
     }
@@ -298,7 +298,7 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
-    if (rate == 0) {
+    if (channel == 4) {
         instructions[offset - 1] = 0x00;
         return;
     }
@@ -374,7 +374,7 @@ void set_phase(uint channel, uint addr, double s0, double e0, double rate,
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
-    if (rate == 0) {
+    if (channel == 4) {
         instructions[offset - 1] = 0x00;
         return;
     }
@@ -471,7 +471,6 @@ void background() {
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
 
-            gpio_put(10, 0);
             if (ad9959.channels > 1) {
                 spi_write_blocking(ad9959.spi, instructions + offset + 1,
                                    (INS_SIZE + 2) * ad9959.channels);
@@ -491,7 +490,6 @@ void background() {
             if (get_status() == ABORTING) break;
 
             wait(0);
-            gpio_put(10, 1);
         }
         dma_channel_abort(dma);
         pio_sm_clear_fifos(trig.pio, trig.sm);
