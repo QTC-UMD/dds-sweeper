@@ -5,11 +5,11 @@ Raspberry Pi Pico interface for the AD9959 DDS
 
 ## Notes
 The frequency resolution of the AD9959 is 
-$= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\sim 0.1164$ Hz. Any frequency input to the dds-sweeper will be rounded to an integer multiple of the frequency resolution.
+$= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\approx 0.1164$ Hz. Any frequency input to the dds-sweeper will be rounded to an integer multiple of the frequency resolution.
 
 The first sweep is delayed for some reason, but then after that they are quite fast, so the first delay needs to be a tad bit longer.
 
-There seems to be a timing uncertainty of $\sim100-200$ ns between when a trigger signal is received and when the next sweep actually starts for amplitudes.
+There seems to be a timing uncertainty of $\approx100-200$ ns between when a trigger signal is received and when the next sweep actually starts for amplitudes.
 
 If multiple instruciton tables are run without shutting off the device, the ending state of the previous table will presist until the first instruction of the next table is triggered.
 
@@ -49,14 +49,18 @@ Turns on extra debug messages printed over serial. `state` should be `on` or `of
 * `setfreq <channel:int> <frequency:float>`:  
 
 
-* `mode <type:int>`:  
+* `setphase <channel:int> <phase_offset:float>`:  
+
+
+* `mode <type:int> <triggers:int>`:  
 Configures what mode the DDS-Sweeper is operating in
   - 0: single tone
   - 1: amplitude sweep
   - 2: frequency sweep
   - 3: phase sweep  
 
-  The operating mode must be set before instructions can be programmed into the DDS-Sweeper
+  The operating mode must be set before instructions can be programmed into the DDS-Sweeper  
+  A trigger value of `0` means the Sweeper is expecting external triggers. A value of `1` means the Sweeper will send its own triggers based on the times passed to the `set` command.
 
 
 * `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <div:int> (<time:int>)`:  
@@ -67,6 +71,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
   - Frequency Sweep (mode 2)  
     `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the frequency resolution.
   - Phase Sweep (mode 3)
+    `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
 
   
 
@@ -83,8 +88,8 @@ Reconfigures the source/reference clock.
   - Mode `0`: Use pico system clock as reference to the AD9959
   - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico
 
-* `setchannels <channel0:int> <channel1:int> <channel2:int> <channel3:int>`:  
-Sets the which channels are active or inactive. You should set the lowest combo of channels you need. Input should be 0 or 1 only.
+* `setchannels <channels:int>`:  
+Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0.
 
 
 * ``:  
