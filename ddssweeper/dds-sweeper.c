@@ -454,6 +454,8 @@ void background() {
     // let other core know we ready
     multicore_fifo_push_blocking(0);
 
+    init_pin(10);
+
     while (true) {
         // wait for the bat-signal
         uint hwstart = multicore_fifo_pop_blocking();
@@ -463,12 +465,13 @@ void background() {
 
         int i = 0;
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-        while (get_status() != ABORTING) {
-            uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+        uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+        while (true) {
 
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) break;
 
+            gpio_put(10, 0);
             if (ad9959.channels > 1) {
                 spi_write_blocking(ad9959.spi, instructions + offset + 1,
                                    (INS_SIZE + 2) * ad9959.channels);
@@ -483,7 +486,12 @@ void background() {
                 multicore_fifo_push_blocking(1);
             }
 
+            offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+
+            if (get_status() == ABORTING) break;
+
             wait(0);
+            gpio_put(10, 1);
         }
         dma_channel_abort(dma);
         pio_sm_clear_fifos(trig.pio, trig.sm);
