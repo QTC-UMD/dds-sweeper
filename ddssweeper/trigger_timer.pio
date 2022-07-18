@@ -15,7 +15,7 @@ trigger:
     out pins, 4         side 1 [3]
     out pins, 4         side 0
     push                
- 
+    irq 0
 
 
 
@@ -56,6 +56,10 @@ loop:
         );
 
         pio_sm_config c = trigger_program_get_default_config(offset);
+
+
+        pio_set_irq0_source_enabled(pio, pis_interrupt0, true);
+
 
         sm_config_set_sideset_pins(&c, update_pin);
         sm_config_set_out_pins(&c, p_pin, 4);

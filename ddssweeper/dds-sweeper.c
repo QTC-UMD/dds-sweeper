@@ -4,6 +4,7 @@
 #include "ad9959.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "hardware/irq.h"
 #include "hardware/pio.h"
 #include "hardware/spi.h"
 #include "pico/multicore.h"
@@ -152,7 +153,7 @@ void abort_run() {
         set_status(ABORTING);
 
         // use the time pio to hit the trigger
-        pio_sm_put(pio1, 0, 10);
+        // pio_sm_put(pio1, 0, 10);
     }
 }
 
@@ -192,10 +193,9 @@ void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
     if (pow > 16384 - 1) pow = 16384 - 1;
     pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
 
-    memcpy(ins + 1, (uint8_t *) &ftw, 4);
-    memcpy(ins + 6, (uint8_t *) &pow, 2);
-    memcpy(ins + 9, (uint8_t *) &asf, 3);
-
+    memcpy(ins + 1, (uint8_t *)&ftw, 4);
+    memcpy(ins + 6, (uint8_t *)&pow, 2);
+    memcpy(ins + 9, (uint8_t *)&asf, 3);
 
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
@@ -450,7 +450,39 @@ void set_phase(uint channel, uint addr, double s0, double e0, double rate,
 // Main Tasks
 // ============================================================================
 
+uint csrs;
+uint i;
+
+void handler() {
+    pio_interrupt_clear(pio0, 0);
+    gpio_put(10, 1);
+    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i);
+
+    // If an instruction is empty that means to stop
+    if (instructions[offset] == 0x00) {
+        set_status(ABORTING);
+        return;
+    }
+
+    if (ad9959.channels > 1) {
+        spi_write_blocking(ad9959.spi, instructions + offset + 1,
+                           (INS_SIZE + 2) * ad9959.channels);
+    } else {
+        spi_write_blocking(ad9959.spi, instructions + offset + 1, INS_SIZE);
+    }
+
+    pio_sm_put(trig.pio, trig.sm, instructions[offset]);
+
+    i++;
+
+}
+
 void background() {
+        // irq
+    irq_set_enabled(PIO0_IRQ_0, true);
+    irq_set_exclusive_handler(PIO0_IRQ_0, &handler);
+
+
     // let other core know we ready
     multicore_fifo_push_blocking(0);
 
@@ -461,29 +493,32 @@ void background() {
         triggers = 0;
         set_status(RUNNING);
 
-        int i = 0;
-        uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+        i = 0;
+        csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+
+        handler();
         while (get_status() != ABORTING) {
-            uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+            // uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
 
-            // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) break;
+            // // If an instruction is empty that means to stop
+            // if (instructions[offset] == 0x00) break;
 
-            if (ad9959.channels > 1) {
-                spi_write_blocking(ad9959.spi, instructions + offset + 1,
-                                   (INS_SIZE + 2) * ad9959.channels);
-            } else {
-                spi_write_blocking(ad9959.spi, instructions + offset + 1,
-                                   INS_SIZE);
-            }
+            // if (ad9959.channels > 1) {
+            //     spi_write_blocking(ad9959.spi, instructions + offset + 1,
+            //                        (INS_SIZE + 2) * ad9959.channels);
+            // } else {
+            //     spi_write_blocking(ad9959.spi, instructions + offset + 1,
+            //                        INS_SIZE);
+            // }
 
-            pio_sm_put(trig.pio, trig.sm, instructions[offset]);
+            // pio_sm_put(trig.pio, trig.sm, instructions[offset]);
 
-            if (i == 1 && timing) {
-                multicore_fifo_push_blocking(1);
-            }
+            // if (i == 1 && timing) {
+            //     multicore_fifo_push_blocking(1);
+            // }
 
-            wait(0);
+            // wait(0);
+            tight_loop_contents();
         }
         dma_channel_abort(dma);
         pio_sm_clear_fifos(trig.pio, trig.sm);
@@ -797,7 +832,10 @@ void loop() {
     }
 }
 
+
 int main() {
+    init_pin(10);
+
     // set sysclock to default 125 MHz
     set_sys_clock_khz(125 * MHZ / 1000, false);
 
@@ -839,6 +877,7 @@ int main() {
     timer_program_init(pio1, 0, offset, TRIGGER);
 
     dma = dma_claim_unused_channel(true);
+
 
     // put chip in a known state
     init_pin(PIN_RESET);
