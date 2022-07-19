@@ -170,7 +170,10 @@ void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
 
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
-        if (channel == 5) instructions[offset] = 0xff;
+        if (channel == 5)
+            instructions[offset] = 0xff;
+        else
+            instructions[offset] = 0x00;
         return;
     }
 
@@ -224,7 +227,10 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
 
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
-        if (channel == 5) instructions[offset] = 0xff;
+        if (channel == 5)
+            instructions[offset] = 0xff;
+        else
+            instructions[offset] = 0x00;
         return;
     }
 
@@ -301,7 +307,10 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
 
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
-        if (channel == 5) instructions[offset] = 0xff;
+        if (channel == 5)
+            instructions[offset] = 0xff;
+        else
+            instructions[offset] = 0x00;
         return;
     }
 
@@ -378,7 +387,10 @@ void set_phase(uint channel, uint addr, double s0, double e0, double rate,
 
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
-        if (channel == 5) instructions[offset] = 0xff;
+        if (channel == 5)
+            instructions[offset] = 0xff;
+        else
+            instructions[offset] = 0x00;
         return;
     }
 
@@ -494,7 +506,6 @@ void background() {
             }
 
             offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
-
 
             wait(0);
         }
