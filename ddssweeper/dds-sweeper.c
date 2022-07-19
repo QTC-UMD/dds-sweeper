@@ -16,7 +16,7 @@
 #define PIN_MISO 12
 #define PIN_MOSI 15
 #define PIN_SCK 14
-#define PIN_RESET 11
+#define PIN_RESET 10
 #define PIN_CLOCK 21
 #define PIN_UPDATE 22
 #define P0 16
@@ -168,8 +168,9 @@ void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
-    if (channel == 4) {
+    if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
+        if (channel == 5) instructions[offset] = 0xff;
         return;
     }
 
@@ -192,10 +193,9 @@ void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
     if (pow > 16384 - 1) pow = 16384 - 1;
     pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
 
-    memcpy(ins + 1, (uint8_t *) &ftw, 4);
-    memcpy(ins + 6, (uint8_t *) &pow, 2);
-    memcpy(ins + 9, (uint8_t *) &asf, 3);
-
+    memcpy(ins + 1, (uint8_t *)&ftw, 4);
+    memcpy(ins + 6, (uint8_t *)&pow, 2);
+    memcpy(ins + 9, (uint8_t *)&asf, 3);
 
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
@@ -222,8 +222,9 @@ void set_amp(uint channel, uint addr, double s0, double e0, double rate,
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + csrs) * channel;
 
-    if (channel == 4) {
+    if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
+        if (channel == 5) instructions[offset] = 0xff;
         return;
     }
 
@@ -298,8 +299,9 @@ void set_freq(uint channel, uint addr, double s0, double e0, double rate,
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
-    if (channel == 4) {
+    if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
+        if (channel == 5) instructions[offset] = 0xff;
         return;
     }
 
@@ -374,8 +376,9 @@ void set_phase(uint channel, uint addr, double s0, double e0, double rate,
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
-    if (channel == 4) {
+    if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
+        if (channel == 5) instructions[offset] = 0xff;
         return;
     }
 
@@ -466,10 +469,15 @@ void background() {
         int i = 0;
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
-        while (true) {
-
+        while (status != ABORTING) {
             // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) break;
+            if (instructions[offset] == 0x00) {
+                if (instructions[offset + 1]) {
+                    i = 0;
+                    offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+                } else
+                    break;
+            }
 
             if (ad9959.channels > 1) {
                 spi_write_blocking(ad9959.spi, instructions + offset + 1,
@@ -487,7 +495,6 @@ void background() {
 
             offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
 
-            if (get_status() == ABORTING) break;
 
             wait(0);
         }
