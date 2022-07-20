@@ -94,4 +94,11 @@ Reconfigures the source/reference clock.
 Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0.
 
 
-* ``:  
+* `save`:  
+Saves the current table to flash memory so that it can be recovered later.
+
+
+* `loads`:  
+Retrieves the table currently stored in flash and restores it in RAM so that it can be used again. A saved table must be loaded before it can be used.
+
+
