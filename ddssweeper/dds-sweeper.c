@@ -425,10 +425,18 @@ void background() {
         wait(0);
         triggers = 0;
 
+        uint8_t *ins = (uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
+
+        uint spi = dma_claim_unused_channel(true);
+        dma_channel_config c = dma_channel_get_default_config(spi);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_dreq(&c, spi_get_dreq(spi1, true));
+        dma_channel_configure(spi, &c, &spi_get_hw(spi1)->dr, NULL, 8, false);
+
         while (status != ABORTING) {
             // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) {
-                if (instructions[offset + 1]) {
+            if (ins[offset] == 0x00) {
+                if (ins[offset + 1]) {
                     i = 0;
                     offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
                 } else
@@ -436,13 +444,17 @@ void background() {
             }
 
             if (ad9959.channels > 1) {
-                spi_write_blocking(spi1, instructions + offset + 1,
-                                   (INS_SIZE + 2) * ad9959.channels);
+                dma_channel_transfer_from_buffer_now(
+                    spi, ins + offset + 1, (INS_SIZE + 2) * ad9959.channels);
+                // spi_write_blocking(spi1, ins + offset + 1,
+                //                    (INS_SIZE + 2) * ad9959.channels);
             } else {
-                spi_write_blocking(spi1, instructions + offset + 1, INS_SIZE);
+                dma_channel_transfer_from_buffer_now(spi, ins + offset + 1,
+                                                     INS_SIZE);
+                // spi_write_blocking(spi1, ins + offset + 1, INS_SIZE);
             }
 
-            pio_sm_put(PIO_TRIG, 0, instructions[offset]);
+            pio_sm_put(PIO_TRIG, 0, ins[offset]);
 
             if (i == 1 && timing) {
                 multicore_fifo_push_blocking(1);
