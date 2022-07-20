@@ -481,6 +481,13 @@ void background() {
         int i = 0;
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+
+        // work aorund fake trigger
+        // pio_sm_put(pio1, 0, 1000);
+        pio_sm_put(trig.pio, trig.sm, 0x0f);
+        pio_sm_put(pio1, 0, 10);
+        wait(0);
+
         while (status != ABORTING) {
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) {
