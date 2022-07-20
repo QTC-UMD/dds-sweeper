@@ -25,6 +25,9 @@
 #define P3 19
 #define TRIGGER 8
 
+#define PIO_TRIG pio0
+#define PIO_TIME pio1
+
 // Mutex for status
 static mutex_t status_mutex;
 static mutex_t wait_mutex;
@@ -44,13 +47,6 @@ int status = STOPPED;
 // ============================================================================
 // global variables
 // ============================================================================
-typedef struct pio_sm {
-    PIO pio;
-    uint sm;
-    uint offset;
-} pio_sm;
-
-pio_sm trig;
 ad9959_config ad9959;
 char readstring[256];
 bool DEBUG = true;
@@ -128,7 +124,7 @@ void readline() {
 // Interact with AD9959
 // ============================================================================
 
-void update() { pio_sm_put(trig.pio, trig.sm, UPDATE); }
+void update() { pio_sm_put(PIO_TRIG, 0, UPDATE); }
 
 void reset() {
     gpio_put(PIN_RESET, 1);
@@ -143,7 +139,7 @@ void reset() {
 }
 
 void wait(uint channel) {
-    pio_sm_get_blocking(trig.pio, trig.sm);
+    pio_sm_get_blocking(PIO_TRIG, 0);
     triggers++;
 }
 
@@ -152,7 +148,7 @@ void abort_run() {
         set_status(ABORTING);
 
         // use the time pio to hit the trigger
-        pio_sm_put(pio1, 0, 10);
+        pio_sm_put(PIO_TIME, 0, 10);
     }
 }
 
@@ -160,9 +156,9 @@ void abort_run() {
 // Set Table Instructions
 // ============================================================================
 
-void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
+void set_ins(uint type, uint channel, uint addr, double s0, double e0,
+             double rate, uint div) {
     uint8_t ins[30];
-    uint32_t ftw, asf, pow;
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
     uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
@@ -177,273 +173,203 @@ void set_tone(uint channel, uint addr, double freq, double amp, double phase) {
         return;
     }
 
-    instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
+    if (type == 0) {
+        // SINGLE TONE
+        uint32_t ftw, asf, pow;
 
-    ins[0] = 0x04;
-    ins[5] = 0x05;
-    ins[8] = 0x06;
+        instructions[offset - 1] |= 0x01;
 
-    ftw = round(freq / ad9959.sys_clk * 4294967296.0);
-    ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
-          ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
+        ins[0] = 0x04;
+        ins[5] = 0x05;
+        ins[8] = 0x06;
 
-    asf = round(amp * 1023);
-    if (asf < 1) asf = 1;
-    asf = ((asf & 0xff) << 16) | (asf & 0xff00) | 0x1000;
-    // asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14) | 0x1000;
+        ftw = round(s0 / ad9959.sys_clk * 4294967296.0);
+        ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
+              ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
 
-    pow = round(phase / 360.0 * 16384.0);
-    if (pow > 16384 - 1) pow = 16384 - 1;
-    pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
+        asf = round(e0 * 1023);
+        if (asf < 1) asf = 1;
+        asf = ((asf & 0xff) << 16) | (asf & 0xff00) | 0x1000;
 
-    memcpy(ins + 1, (uint8_t *)&ftw, 4);
-    memcpy(ins + 6, (uint8_t *)&pow, 2);
-    memcpy(ins + 9, (uint8_t *)&asf, 3);
+        pow = round(rate / 360.0 * 16384.0);
+        if (pow > 16384 - 1) pow = 16384 - 1;
+        pow = ((pow & 0xff) << 8) | ((pow & 0xff00) >> 8);
 
-    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
-
-    if (ad9959.channels > 1) {
-        uint8_t csr[] = {
-            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
-        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
-    }
-
-    printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
-           channel_offset);
-    for (int i = 0; i < INS_SIZE; i++) {
-        printf("%02x ", ins[i]);
-    }
-    printf("\n");
-}
-
-void set_amp(uint channel, uint addr, double s0, double e0, double rate,
-             uint div) {
-    uint8_t ins[30];
-    uint32_t higher, lower, asf;
-
-    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
-    uint channel_offset = (INS_SIZE + csrs) * channel;
-
-    if (channel == 4 || channel == 5) {
-        instructions[offset - 1] = 0x00;
-        if (channel == 5)
-            instructions[offset] = 0xff;
-        else
-            instructions[offset] = 0x00;
-        return;
-    }
-
-    s0 = round(s0 * 1023);
-    e0 = round(e0 * 1023);
-    asf = round(rate * 1023);
-
-    if (asf < 1) asf = 1;
-
-    asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14);
-
-    if (s0 <= e0) {
-        // UP SWEEP
-        lower = (uint32_t)s0;
-        higher = (uint32_t)e0;
-        instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 8, (uint8_t *)&asf, 4);
-        memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
-
-        ins[5] = 0x01;
-        ins[6] = div;
-
-        memcpy(ins + 23, "\x40\x43\x10", 3);
+        memcpy(ins + 1, (uint8_t *)&ftw, 4);
+        memcpy(ins + 6, (uint8_t *)&pow, 2);
+        memcpy(ins + 9, (uint8_t *)&asf, 3);
     } else {
-        // SWEEP DOWN
-        lower = (uint32_t)e0;
-        higher = (uint32_t)s0;
-        instructions[offset - 1] &= ~(1u << (channel + 4));
-        instructions[offset - 1] |= 1u << channel;
-        memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
-        memcpy(ins + 13, (uint8_t *)&asf, 4);
+        // Not a single tone
+        uint32_t lower, higher;
 
-        ins[5] = div;
-        ins[6] = 0x01;
+        if (type == 1) {
+            // AMP sweep
+            uint32_t asf;
 
-        memcpy(ins + 23, "\x40\x43\x00", 3);
+            // register addresses
+            ins[0] = 0x06;
+            ins[4] = 0x07;
+            ins[7] = 0x08;
+            ins[12] = 0x09;
+            ins[17] = 0x0a;
+            ins[22] = 0x03;
+
+            // calculations
+            s0 = round(s0 * 1023);
+            e0 = round(e0 * 1023);
+            asf = round(rate * 1023);
+
+            // validation
+            if (asf < 1) asf = 1;
+
+            // bit alignment
+            asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14);
+
+            if (s0 <= e0) {
+                // UP SWEEP
+                lower = (uint32_t)s0;
+                higher = (uint32_t)e0;
+
+                ins[5] = 0x01;
+                ins[6] = div;
+
+                memcpy(ins + 8, (uint8_t *)&asf, 4);
+                memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
+                memcpy(ins + 23, "\x40\x43\x10", 3);
+            } else {
+                // SWEEP DOWN
+                lower = (uint32_t)e0;
+                higher = (uint32_t)s0;
+
+                ins[5] = div;
+                ins[6] = 0x01;
+
+                memcpy(ins + 23, "\x40\x43\x00", 3);
+                memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
+                memcpy(ins + 13, (uint8_t *)&asf, 4);
+            }
+
+            // bit alignments
+            lower = ((lower & 0xff) << 16) | (lower & 0xff00);
+            higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
+
+            memcpy(ins + 1, (uint8_t *)&lower, 3);
+            memcpy(ins + 18, (uint8_t *)&higher, 4);
+
+        } else if (type == 2) {
+            // FREQ Sweep
+
+            ins[0] = 0x04;
+            ins[5] = 0x07;
+            // ??
+            ins[6] = div;
+            ins[7] = div;
+            ins[8] = 0x08;
+            ins[13] = 0x09;
+            ins[18] = 0x0a;
+            ins[23] = 0x03;
+
+            // convert from frequencies to tuning words
+            uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
+            uint32_t eword = round(e0 / ad9959.sys_clk * 4294967296.0);
+            uint32_t rword = round(rate / ad9959.sys_clk * 4294967296.0);
+
+            if (rword < 1) rword = 1;
+
+            // gross bit shifting to force big endianness
+            sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
+                    ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
+            eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
+                    ((eword & 0xff0000) >> 8) | ((eword & 0xff000000) >> 24);
+            rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
+                    ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
+
+            if (s0 <= e0) {
+                // sweep up
+                lower = sword;
+                higher = eword;
+
+                memcpy(ins + 9, (uint8_t *)&rword, 4);
+                memcpy(ins + 14, "\x00\x00\x00\x00", 4);
+                memcpy(ins + 24, "\x80\x43\x10", 3);
+            } else {
+                // sweep down
+                ins[7] = 0x01;
+                lower = eword;
+                higher = sword;
+
+                memcpy(ins + 9, "\xff\xff\xff\xff", 4);
+                memcpy(ins + 14, (uint8_t *)&rword, 4);
+                memcpy(ins + 24, "\x80\x43\x00", 3);
+            }
+
+            memcpy(ins + 1, (uint8_t *)&lower, 4);
+            memcpy(ins + 19, (uint8_t *)&higher, 4);
+        } else if (type == 3) {
+            // PHASE Sweep
+            uint32_t pow;
+
+            ins[0] = 0x05;
+            ins[3] = 0x07;
+            // ??
+            ins[4] = div;
+            ins[5] = div;
+            ins[6] = 0x08;
+            ins[11] = 0x09;
+            ins[16] = 0x0a;
+            ins[21] = 0x03;
+
+            // convert from degrees to tuning words
+            s0 = round(s0 / 360.0 * 16384.0);
+            e0 = round(e0 / 360.0 * 16384.0);
+            pow = round(rate / 360.0 * 16384.0);
+
+            if (pow > 16384 - 1) pow = 16384 - 1;
+            if (s0 > 16384 - 1) s0 = 16384 - 1;
+            if (e0 > 16384 - 1) e0 = 16384 - 1;
+
+            // gross bit shifting to force big endianness
+            pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
+
+            if (s0 <= e0) {
+                // sweep up
+                lower = (uint32_t)s0;
+                higher = (uint32_t)e0;
+
+                memcpy(ins + 7, (uint8_t *)&pow, 4);
+                memcpy(ins + 12, "\x00\x00\x00\x00", 4);
+                memcpy(ins + 22, "\xc0\x43\x10", 3);
+            } else {
+                // sweep down
+                ins[7] = 0x01;
+                lower = (uint32_t)e0;
+                higher = (uint32_t)s0;
+
+                memcpy(ins + 7, "\xff\xff\xff\xff", 4);
+                memcpy(ins + 12, (uint8_t *)&pow, 4);
+                memcpy(ins + 22, "\xc0\x43\x00", 3);
+            }
+
+            lower = ((lower & 0xff) << 8) | ((lower & 0xff00) >> 8);
+            higher = ((higher & 0x3fc0) >> 6) | ((higher & 0x3f) << 10);
+
+            memcpy(ins + 1, (uint8_t *)&lower, 2);
+            memcpy(ins + 17, (uint8_t *)&higher, 4);
+        }
+
+        // setting profile pin trigger bits
+        if (s0 <= e0 && ad9959.channels == 1) {
+            instructions[offset - 1] |= 0xff;
+        } else if (s0 <= e0) {
+            instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
+
+        } else if (ad9959.channels == 1) {
+            instructions[offset - 1] |= 0x0f;
+        } else {
+            instructions[offset - 1] &= ~(1u << (channel + 4));
+            instructions[offset - 1] |= 1u << channel;
+        }
     }
-    lower = ((lower & 0xff) << 16) | (lower & 0xff00);
-    higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
-    memcpy(ins + 1, (uint8_t *)&lower, 3);
-    memcpy(ins + 18, (uint8_t *)&higher, 4);
-
-    ins[0] = 0x06;
-    ins[4] = 0x07;
-    ins[7] = 0x08;
-    ins[12] = 0x09;
-    ins[17] = 0x0a;
-    ins[22] = 0x03;
-
-    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
-
-    if (ad9959.channels > 1) {
-        uint8_t csr[] = {
-            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
-        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
-    }
-
-    printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
-           channel_offset);
-    for (int i = 0; i < INS_SIZE; i++) {
-        printf("%02x ", ins[i]);
-    }
-    printf("\n");
-}
-
-void set_freq(uint channel, uint addr, double s0, double e0, double rate,
-              uint div) {
-    uint8_t ins[30];
-    uint32_t higher, lower, ftw;
-
-    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
-    uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
-
-    if (channel == 4 || channel == 5) {
-        instructions[offset - 1] = 0x00;
-        if (channel == 5)
-            instructions[offset] = 0xff;
-        else
-            instructions[offset] = 0x00;
-        return;
-    }
-
-    // convert from frequencies to tuning words
-    uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
-    uint32_t eword = round(e0 / ad9959.sys_clk * 4294967296.0);
-    uint32_t rword = round(rate / ad9959.sys_clk * 4294967296.0);
-
-    if (rword < 1) rword = 1;
-
-    // gross bit shifting to force big endianness
-    sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
-            ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
-    eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
-            ((eword & 0xff0000) >> 8) | ((eword & 0xff000000) >> 24);
-    rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
-            ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
-
-    ins[0] = 0x04;
-    ins[5] = 0x07;
-    // ??
-    ins[6] = div;
-    ins[7] = div;
-    ins[8] = 0x08;
-    ins[13] = 0x09;
-    ins[18] = 0x0a;
-    ins[23] = 0x03;
-
-    if (s0 <= e0) {
-        // sweep up
-        lower = sword;
-        higher = eword;
-        instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 9, (uint8_t *)&rword, 4);
-        memcpy(ins + 14, "\x00\x00\x00\x00", 4);
-        memcpy(ins + 24, "\x80\x43\x10", 3);
-    } else {
-        // sweep down
-        ins[7] = 0x01;
-        lower = eword;
-        higher = sword;
-        instructions[offset - 1] &= ~(1u << (channel + 4));
-        instructions[offset - 1] |= 1u << channel;
-        memcpy(ins + 9, "\xff\xff\xff\xff", 4);
-        memcpy(ins + 14, (uint8_t *)&rword, 4);
-        memcpy(ins + 24, "\x80\x43\x00", 3);
-    }
-
-    memcpy(ins + 1, (uint8_t *)&lower, 4);
-    memcpy(ins + 19, (uint8_t *)&higher, 4);
-
-    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
-
-    if (ad9959.channels > 1) {
-        uint8_t csr[] = {
-            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
-        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
-    }
-
-    // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
-    // channel_offset); for (int i = 0; i < INS_SIZE; i++) {
-    //     printf("%02x ", ins[i]);
-    // }
-    // printf("\n");
-}
-void set_phase(uint channel, uint addr, double s0, double e0, double rate,
-               uint div) {
-    uint8_t ins[30];
-    uint32_t higher, lower, pow;
-
-    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
-    uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
-
-    if (channel == 4 || channel == 5) {
-        instructions[offset - 1] = 0x00;
-        if (channel == 5)
-            instructions[offset] = 0xff;
-        else
-            instructions[offset] = 0x00;
-        return;
-    }
-
-    // convert from degrees to tuning words
-    s0 = round(s0 / 360.0 * 16384.0);
-    e0 = round(e0 / 360.0 * 16384.0);
-    pow = round(rate / 360.0 * 16384.0);
-
-    if (pow > 16384 - 1) pow = 16384 - 1;
-    if (s0 > 16384 - 1) s0 = 16384 - 1;
-    if (e0 > 16384 - 1) e0 = 16384 - 1;
-
-    // gross bit shifting to force big endianness
-    pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
-
-    ins[0] = 0x05;
-    ins[3] = 0x07;
-    // ??
-    ins[4] = div;
-    ins[5] = div;
-    ins[6] = 0x08;
-    ins[11] = 0x09;
-    ins[16] = 0x0a;
-    ins[21] = 0x03;
-
-    if (s0 <= e0) {
-        // sweep up
-        lower = (uint32_t)s0;
-        higher = (uint32_t)e0;
-        instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-        memcpy(ins + 7, (uint8_t *)&pow, 4);
-        memcpy(ins + 12, "\x00\x00\x00\x00", 4);
-        memcpy(ins + 22, "\xc0\x43\x10", 3);
-    } else {
-        // sweep down
-        ins[7] = 0x01;
-        lower = (uint32_t)e0;
-        higher = (uint32_t)s0;
-        instructions[offset - 1] &= ~(1u << (channel + 4));
-        instructions[offset - 1] |= 1u << channel;
-        memcpy(ins + 7, "\xff\xff\xff\xff", 4);
-        memcpy(ins + 12, (uint8_t *)&pow, 4);
-        memcpy(ins + 22, "\xc0\x43\x00", 3);
-    }
-
-    lower = ((lower & 0xff) << 8) | ((lower & 0xff00) >> 8);
-
-    printf("higher: %u\n", higher);
-    higher = ((higher & 0x3fc0) >> 6) | ((higher & 0x3f) << 10);
-    printf("higher: %u\n", higher);
-
-    memcpy(ins + 1, (uint8_t *)&lower, 2);
-    memcpy(ins + 17, (uint8_t *)&higher, 4);
 
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
@@ -483,9 +409,9 @@ void background() {
         uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
 
         // work aorund fake trigger
-        // pio_sm_put(pio1, 0, 1000);
-        pio_sm_put(trig.pio, trig.sm, 0x0f);
-        pio_sm_put(pio1, 0, 10);
+        // pio_sm_put(PIO_TIME, 0, 1000);
+        pio_sm_put(PIO_TRIG, 0, 0x0f);
+        pio_sm_put(PIO_TIME, 0, 10);
         wait(0);
 
         while (status != ABORTING) {
@@ -499,14 +425,14 @@ void background() {
             }
 
             if (ad9959.channels > 1) {
-                spi_write_blocking(ad9959.spi, instructions + offset + 1,
+                spi_write_blocking(spi1, instructions + offset + 1,
                                    (INS_SIZE + 2) * ad9959.channels);
             } else {
-                spi_write_blocking(ad9959.spi, instructions + offset + 1,
+                spi_write_blocking(spi1, instructions + offset + 1,
                                    INS_SIZE);
             }
 
-            pio_sm_put(trig.pio, trig.sm, instructions[offset]);
+            pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
             if (i == 1 && timing) {
                 multicore_fifo_push_blocking(1);
@@ -517,8 +443,8 @@ void background() {
             wait(0);
         }
         dma_channel_abort(dma);
-        pio_sm_clear_fifos(trig.pio, trig.sm);
-        pio_sm_clear_fifos(pio1, 0);
+        pio_sm_clear_fifos(PIO_TRIG, 0);
+        pio_sm_clear_fifos(PIO_TIME, 0);
         set_status(STOPPED);
     }
 }
@@ -564,7 +490,7 @@ void loop() {
             "aborted).\n",
             readstring, STOPPED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
-        ad9959_read_all(&ad9959);
+        read_all();
         printf("ok\n");
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
@@ -720,14 +646,14 @@ void loop() {
             } else if (timing && parsed < 6) {
                 printf("Invalid Command - expected: set <> <> nbeed a time!\n");
             } else {
-                set_tone(channel, addr, freq, amp, phase);
+                set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
                 if (timing) {
                     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
                         time - 10;
                 }
             }
 
-        } else if (ad9959.sweep_type == 1) {
+        } else if (ad9959.sweep_type <= 3) {
             // AMP SWEEP
             // set <channel:int> <addr:int> <start_point:double>
             // <end_point:double> <rate:double> <div:int>
@@ -743,53 +669,8 @@ void loop() {
             } else if (timing && parsed < 7) {
                 printf("Invalid Command - expected: set <> <> nbeed a time!\n");
             } else {
-                set_amp(channel, addr, start, end, rate, div);
-                if (timing) {
-                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
-                        time - 10;
-                }
-            }
-
-        } else if (ad9959.sweep_type == 2) {
-            // FREQ SWEEP
-            // set <channel:int> <addr:int> <start_point:double>
-            // <end_point:double> <rate:double> <div:int>
-            uint channel, addr, div;
-            uint32_t time;
-            double start, end, rate;
-            int parsed =
-                sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel,
-                       &addr, &start, &end, &rate, &div, &time);
-
-            if (parsed < 6) {
-                printf("Invalid Command - expected: \n");
-            } else if (timing && parsed < 7) {
-                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
-            } else {
-                set_freq(channel, addr, start, end, rate, div);
-                if (timing) {
-                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
-                        time - 10;
-                }
-            }
-
-        } else if (ad9959.sweep_type == 3) {
-            // PHASE SWEEP
-            // set <channel:int> <addr:int> <start_point:double>
-            // <end_point:double> <rate:double> <div:int>
-            uint channel, addr, div;
-            uint32_t time;
-            double start, end, rate;
-            int parsed =
-                sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel,
-                       &addr, &start, &end, &rate, &div, &time);
-
-            if (parsed < 6) {
-                printf("Invalid Command - expected: \n");
-            } else if (timing && parsed < 7) {
-                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
-            } else {
-                set_phase(channel, addr, start, end, rate, div);
+                set_ins(ad9959.sweep_type, channel, addr, start, end, rate,
+                        div);
                 if (timing) {
                     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
                         time - 10;
@@ -809,14 +690,14 @@ void loop() {
             multicore_fifo_push_blocking(0);
 
             if (timing) {
-                multicore_fifo_pop_blocking();
-                // uint32_t wats[] = {4000, 4000, 0};
                 dma_channel_config c = dma_channel_get_default_config(dma);
                 channel_config_set_dreq(&c, DREQ_PIO1_TX0);
                 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
 
+                multicore_fifo_pop_blocking();
+
                 // make this not hardcoded at 15000?
-                dma_channel_configure(dma, &c, &pio1->txf[0],
+                dma_channel_configure(dma, &c, &PIO_TIME->txf[0],
                                       instructions + TIMING_OFFSET, 15000,
                                       true);
             }
@@ -829,23 +710,23 @@ void loop() {
 }
 
 int main() {
-    // set sysclock to default 125 MHz
+    // set sysclock to default 125 MHz and output it
     set_sys_clock_khz(125 * MHZ / 1000, false);
+    clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
-    // have SPI clock follow the system clock for max speed
+    // attatch spi to system clock
     clock_configure(clk_peri, 0,
                     CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
-    // output system clock on pin 21
-    clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
-    // turn on light as indicator that this is working!
+    // turn on LED
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
     // init SPI
     spi_init(spi1, 100 * MHZ);
+    // AD9959 seems to have support for all SPI modes
     spi_set_format(spi1, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
@@ -859,27 +740,27 @@ int main() {
     mutex_init(&status_mutex);
     mutex_init(&wait_mutex);
 
-    // init the trigger
-    trig.pio = pio0;
-    trig.sm = pio_claim_unused_sm(pio0, true);
-    trig.offset = pio_add_program(pio0, &trigger_program);
-    trigger_program_init(pio0, trig.sm, trig.offset, TRIGGER, 9, P0,
-                         PIN_UPDATE);
+    // init the PIO
+    uint offset = pio_add_program(PIO_TRIG, &trigger_program);
+    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, 9, P0, PIN_UPDATE);
+    offset = pio_add_program(PIO_TIME, &timer_program);
+    timer_program_init(PIO_TIME, 0, offset, TRIGGER);
 
-    uint offset = pio_add_program(pio1, &timer_program);
-    timer_program_init(pio1, 0, offset, TRIGGER);
-
+    // setup dma
     dma = dma_claim_unused_channel(true);
 
     // put chip in a known state
     init_pin(PIN_RESET);
     reset();
 
+    // second init is a workaround for the first char getting corrupted
     stdio_init_all();
     stdio_init_all();
 
+    // zeroing out the table is not necessary, but could help debugging tables
     memset(instructions, 0, MAX_SIZE);
 
+    // for debugging over uart only
     printf("\n==================================\n");
 
     while (true) {

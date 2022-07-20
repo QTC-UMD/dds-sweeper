@@ -23,16 +23,12 @@ ad9959_config ad9959_get_default_config() {
         memcpy(c.cftw0[i], "\x04\x00\x00\x00\x00", 5);
         memcpy(c.cpow0[i], "\x05\x00\x00", 3);
         memcpy(c.acr[i], "\x06\x00\x00\x00", 4);
-        memcpy(c.lsrr[i], "\x07\x00\x00", 3);
-        memcpy(c.rdw[i], "\x08\x00\x00\x00\x00", 5);
-        memcpy(c.fdw[i], "\x09\x00\x00\x00\x00", 5);
     }
 
     c.ref_clk = 125 * MHZ;
     c.pll_mult = 4;
     c.sys_clk = c.ref_clk * c.pll_mult;
     c.sweep_type = -1;
-    c.spi = spi1;
 
     c.channels = 1;
 
@@ -107,46 +103,42 @@ void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {
 }
 
 void ad9959_send_config(ad9959_config* c) {
-    spi_write_blocking(c->spi, c->fr1, 4);
-    spi_write_blocking(c->spi, c->fr2, 3);
+    spi_write_blocking(spi1, c->fr1, 4);
+    spi_write_blocking(spi1, c->fr2, 3);
 
     for (int i = 0; i < 4; i++) {
         uint8_t csr[] = {
             0x00,
             (1u << (i + 4)) | 0x02,
         };
-        spi_write_blocking(c->spi, csr, 2);
-        spi_write_blocking(c->spi, c->cfr[i], 4);
-        spi_write_blocking(c->spi, c->cftw0[i], 5);
-        spi_write_blocking(c->spi, c->cpow0[i], 3);
-        spi_write_blocking(c->spi, c->acr[i], 4);
-        spi_write_blocking(c->spi, c->lsrr[i], 3);
-        spi_write_blocking(c->spi, c->rdw[i], 5);
-        spi_write_blocking(c->spi, c->fdw[i], 5);
+        spi_write_blocking(spi1, csr, 2);
+        spi_write_blocking(spi1, c->cfr[i], 4);
+        spi_write_blocking(spi1, c->cftw0[i], 5);
+        spi_write_blocking(spi1, c->cpow0[i], 3);
+        spi_write_blocking(spi1, c->acr[i], 4);
     }
 
-    spi_write_blocking(c->spi, c->csr, 2);
+    spi_write_blocking(spi1, c->csr, 2);
 }
 
-// could be helpful for debugging
-static void read(ad9959_config* c, uint8_t reg, size_t len, uint8_t* buf) {
+void read_reg(uint8_t reg, size_t len, uint8_t* buf) {
     reg |= 0x80;
-    spi_write_blocking(c->spi, &reg, 1);
-    spi_read_blocking(c->spi, 0, buf, len);
+    spi_write_blocking(spi1, &reg, 1);
+    spi_read_blocking(spi1, 0, buf, len);
 }
 
-void ad9959_read_all(ad9959_config* c) {
+void read_all() {
     spi_set_baudrate(spi1, 1 * MHZ);
 
     uint8_t resp[20];
 
-    read(c, 0x00, 1, resp);
+    read_reg(0x00, 1, resp);
     printf(" CSR: %02x\n", resp[0]);
 
-    read(c, 0x01, 3, resp);
+    read_reg(0x01, 3, resp);
     printf(" FR1: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
-    read(c, 0x02, 2, resp);
+    read_reg(0x02, 2, resp);
     printf(" FR2: %02x %02x\n", resp[0], resp[1]);
 
     for (int i = 0; i < 4; i++) {
@@ -154,29 +146,29 @@ void ad9959_read_all(ad9959_config* c) {
 
         uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x02};
 
-        spi_write_blocking(c->spi, csr, 2);
+        spi_write_blocking(spi1, csr, 2);
 
-        read(c, 0x03, 3, resp);
+        read_reg(0x03, 3, resp);
         printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
-        read(c, 0x04, 4, resp);
+        read_reg(0x04, 4, resp);
         printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
                resp[3]);
 
-        read(c, 0x05, 2, resp);
+        read_reg(0x05, 2, resp);
         printf("CPOW: %02x %02x\n", resp[0], resp[1]);
 
-        read(c, 0x06, 3, resp);
+        read_reg(0x06, 3, resp);
         printf(" ACR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
-        read(c, 0x07, 2, resp);
+        read_reg(0x07, 2, resp);
         printf("LSRR: %02x %02x\n", resp[0], resp[1]);
 
-        read(c, 0x08, 4, resp);
+        read_reg(0x08, 4, resp);
         printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
                resp[3]);
 
-        read(c, 0x09, 4, resp);
+        read_reg(0x09, 4, resp);
         printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
                resp[3]);
     }

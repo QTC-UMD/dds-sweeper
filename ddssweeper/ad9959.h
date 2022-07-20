@@ -19,10 +19,6 @@ typedef struct ad9959_config {
     uint8_t cftw0[4][5];
     uint8_t cpow0[4][3];
     uint8_t acr[4][4];
-    uint8_t lsrr[4][3];
-    uint8_t rdw[4][5];
-    uint8_t fdw[4][5];
-    spi_inst_t* spi;
     double sys_clk;
     double ref_clk;
     uint32_t pll_mult;
@@ -41,6 +37,7 @@ uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp);
 
 void ad9959_send_config(ad9959_config* c);
 
-void ad9959_read_all(ad9959_config* c);
+void read_reg(uint8_t reg, size_t len, uint8_t* buf);
+void read_all();
 
 #endif

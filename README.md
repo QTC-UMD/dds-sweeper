@@ -19,6 +19,8 @@ When you start a table, you are locked into the parameters that are not being sw
 
 For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of operation.
 
+The sweeper cannot doing anything while waiting for the initial start
+
 ## Serial API
 Note: Commands must be terminated with `\n`.
 
