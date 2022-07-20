@@ -4,6 +4,7 @@
 #include "ad9959.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "hardware/flash.h"
 #include "hardware/pio.h"
 #include "hardware/spi.h"
 #include "pico/multicore.h"
@@ -32,6 +33,8 @@
 static mutex_t status_mutex;
 static mutex_t wait_mutex;
 
+#define FLASH_TARGET_OFFSET (256 * 1024)
+
 // STATUS flag
 #define STOPPED 0
 #define RUNNING 1
@@ -41,7 +44,7 @@ int status = STOPPED;
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 
-#define MAX_SIZE 250000
+#define MAX_SIZE 249856
 #define TIMING_OFFSET 187500
 
 // ============================================================================
@@ -486,6 +489,14 @@ void loop() {
     } else if (strncmp(readstring, "abort", 5) == 0) {
         abort_run();
         printf("ok\n");
+    } else if (strncmp(readstring, "save", 4) == 0) {
+        uint32_t ints = save_and_disable_interrupts();
+        printf("Erasing...\n");
+        flash_range_erase(FLASH_TARGET_OFFSET, MAX_SIZE);
+        printf("Programming...\n");
+        flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
+        restore_interrupts(ints);
+        printf("ok\n");
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
@@ -498,6 +509,16 @@ void loop() {
             readstring, STOPPED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         read_all();
+        printf("ok\n");
+    } else if (strncmp(readstring, "load", 4) == 0) {
+        for (int j = 0; j < MAX_SIZE; j++) {
+            instructions[j] = ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET))[j];
+        }
+        for (int j = 0; j < 100; j++) {
+            printf("%02x ", instructions[j]);
+        }
+        printf("\n");
+
         printf("ok\n");
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;

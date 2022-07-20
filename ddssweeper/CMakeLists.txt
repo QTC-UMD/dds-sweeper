@@ -13,6 +13,7 @@ target_link_libraries(dds-sweeper
         hardware_clocks
         hardware_pio
         hardware_dma
+        hardware_flash
         )
 
 # UART/USB config
