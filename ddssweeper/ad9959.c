@@ -22,11 +22,10 @@ void ad9959_default_config() {
         spi_write_blocking(spi1, asf, 3);
         spi_write_blocking(spi1, pow, 4);
     }
-
 }
 
-uint32_t ad9959_send_freq(ad9959_config* c, uint channel, double freq) {
-    uint32_t ftw = (uint32_t)round(freq * 4294967296.l / c->sys_clk);
+uint32_t send_freq(ad9959_config* c, uint channel, double freq) {
+    uint32_t ftw = round(freq * 4294967296.l / c->sys_clk);
 
     uint8_t buf[5];
     buf[0] = 0x04;
@@ -43,6 +42,41 @@ uint32_t ad9959_send_freq(ad9959_config* c, uint channel, double freq) {
 
     // for debugging
     return ftw;
+}
+
+double send_phase(uint channel, double phase) {
+    uint32_t pow = round(phase / 360.0 * 16384.0);
+
+    if (pow > 16383) pow = 16383;
+
+    uint8_t buf[3];
+    buf[0] = 0x05;
+    buf[1] = (0xff00 & pow) >> 8;
+    buf[2] = 0xff & pow;
+
+    uint8_t csr[] = {0x00, (1u << (channel + 4)) | 0x02};
+    spi_write_blocking(spi1, csr, 2);
+    spi_write_blocking(spi1, buf, 3);
+
+    return pow / 16384.0 * 360.0;
+}
+
+double send_amp(uint channel, double amp) {
+    uint32_t asf = round(amp * 1024);
+
+    if (asf > 1023) asf = 1023;
+
+    uint8_t buf[4];
+    buf[0] = 0x06;
+    buf[1] = 0x00;
+    buf[2] = ((0x300 & asf) >> 8) | 0x10;
+    buf[3] = 0xff & asf;
+
+    uint8_t csr[] = {0x00, (1u << (channel + 4)) | 0x02};
+    spi_write_blocking(spi1, csr, 2);
+    spi_write_blocking(spi1, buf, 4);
+
+    return asf / 1023.0;
 }
 
 void read_reg(uint8_t reg, size_t len, uint8_t* buf) {

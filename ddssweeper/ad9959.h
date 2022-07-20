@@ -19,7 +19,9 @@ typedef struct ad9959_config {
     uint channels;
 } ad9959_config;
 
-uint32_t ad9959_send_freq(ad9959_config* c, uint channel, double freq);
+uint32_t send_freq(ad9959_config* c, uint channel, double freq);
+double send_phase(uint channel, double phase);
+double send_amp(uint channel, double amp);
 void ad9959_default_config();
 void read_reg(uint8_t reg, size_t len, uint8_t* buf);
 void read_all();

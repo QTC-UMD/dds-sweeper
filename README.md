@@ -90,7 +90,7 @@ Reconfigures the source/reference clock.
   - Mode `0`: Use pico system clock as reference to the AD9959
   - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico
 
-* `setchannels <channels:int>`:  
+* `setchannels <num:int>`:  
 Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0.
 
 

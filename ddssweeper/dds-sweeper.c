@@ -132,7 +132,6 @@ void reset() {
     gpio_put(PIN_RESET, 0);
     sleep_ms(1);
 
-    ad9959.ref_clk = 125 * MHZ;
     ad9959.pll_mult = 4;
     ad9959.sys_clk = ad9959.ref_clk * ad9959.pll_mult;
     ad9959.sweep_type = -1;
@@ -406,7 +405,6 @@ void background() {
         // wait for the bat-signal
         uint hwstart = multicore_fifo_pop_blocking();
 
-        triggers = 0;
         set_status(RUNNING);
 
         int i = 0;
@@ -422,6 +420,7 @@ void background() {
         pio_sm_put(PIO_TRIG, 0, 0x0f);
         pio_sm_put(PIO_TIME, 0, 10);
         wait(0);
+        triggers = 0;
 
         while (status != ABORTING) {
             // If an instruction is empty that means to stop
@@ -506,7 +505,9 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u", &channels);
 
         if (parsed < 1) {
-            printf("bad setchannels command\n");
+            printf("Invalid Command - expected: setchannels <num:int>\n");
+        } else if (channels < 1 || channels > 4) {
+            printf("Invalid Command - expected: num must be in range 0-3\n");
         } else {
             ad9959.channels = channels;
             printf("ok\n");
@@ -522,43 +523,62 @@ void loop() {
                 "Invalid Command - too few arguments - expected: setfreq "
                 "<channel:int> <frequency:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Command - channel must be in range 0-3\n");
+            printf("Invalid Command - num must be in range 0-3\n");
         } else {
-            uint64_t word = ad9959_send_freq(&ad9959, channel, freq);
+            uint64_t word = send_freq(&ad9959, channel, freq);
             update();
 
             if (DEBUG) {
                 double f = word * ad9959.sys_clk / 4294967296.l;
-                printf("%12lf\n", f);
+                printf("Freq: %12lf\n", f);
             }
 
             printf("ok\n");
         }
-        // } else if (strncmp(readstring, "setphase", 8) == 0) {
-        //     // setfreq <channel:int> <frequency:float>
+    } else if (strncmp(readstring, "setphase", 8) == 0) {
+        // setphase <channel:int> <phase:float>
 
-        //     uint channel;
-        //     double phase;
-        //     int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
-        //     if (parsed < 2) {
-        //         printf(
-        //             "Invalid Command - too few arguments - expected: setfreq
-        //             "
-        //             "<channel:int> <frequency:double>\n");
-        //     } else if (channel < 0 || channel > 3) {
-        //         printf("Invalid Command - channel must be in range 0-3\n");
-        //     } else {
-        //         uint64_t word = ad9959_config_phase(&ad9959, channel, phase);
-        //         ad9959_send_config(&ad9959);
-        //         update();
+        uint channel;
+        double phase;
+        int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
+        if (parsed < 2) {
+            printf(
+                "Invalid Command - too few arguments - expected: setphase "
+                "<channel:int> <frequency:double>\n");
+        } else if (channel < 0 || channel > 3) {
+            printf("Invalid Command - channel must be in range 0-3\n");
+        } else {
+            double resp = send_phase(channel, phase);
+            update();
 
-        //         if (DEBUG) {
-        //             double f = word * ad9959.sys_clk / 4294967296.l;
-        //             printf("%12lf\n", f);
-        //         }
+            if (DEBUG) {
+                printf("Phase: %12lf\n", resp);
+            }
 
-        //         printf("ok\n");
-        //     }
+            printf("ok\n");
+        }
+    } else if (strncmp(readstring, "setamp", 6) == 0) {
+        // setamp <channel:int> <amp:float>
+
+        uint channel;
+        double amp;
+        int parsed = sscanf(readstring, "%*s %u %lf", &channel, &amp);
+        if (parsed < 2) {
+            printf(
+                "Invalid Command - too few arguments - expected: setamp "
+                "<channel:int> <amp:double>\n");
+        } else if (channel < 0 || channel > 3) {
+            printf("Invalid Command - channel must be in range 0-3\n");
+        } else {
+            double resp = send_amp(channel, amp);
+            update();
+
+            if (DEBUG) {
+                printf("Amp: %12lf\n", resp);
+            }
+
+            printf("ok\n");
+        }
     } else if (strncmp(readstring, "setmult", 7) == 0) {
         uint mult;
 
@@ -580,13 +600,11 @@ void loop() {
         uint freq;  // in Hz (up to 133 MHz)
         int parsed = sscanf(readstring, "%*s %u %u", &src, &freq);
         if (parsed < 2) {
-            printf("invalid request\n");
+            printf(
+                "Invalid Command - expected: setclock <mode:int> <freq:int>\n");
         } else {
-            if (DEBUG) {
-                printf("Got request mode=%u, freq=%u MHz\n", src, freq / MHZ);
-            }
             if (src > 1) {
-                printf("invalid request\n");
+                printf("Invalid Command - mode must be in range 0-1\n");
             } else {
                 // Set new clock frequency
                 if (src == 0) {
@@ -612,7 +630,10 @@ void loop() {
                     ad9959.ref_clk = freq;
                     ad9959.sys_clk = freq * ad9959.pll_mult;
                     gpio_deinit(PIN_CLOCK);
-                    printf("not implemented yet\n");
+                    if (DEBUG)
+                        printf(
+                            "Pico no longer providing ref_clock to AD9959\n");
+                    printf("ok\n");
                 }
             }
         }
@@ -672,9 +693,15 @@ void loop() {
                        &addr, &start, &end, &rate, &div, &time);
 
             if (parsed < 6) {
-                printf("Invalid Command - expected: \n");
+                printf(
+                    "Invalid Command - expected: set <channel:int> <addr:int> "
+                    "<start_point:double> <end_point:double> <rate:double> "
+                    "(<time:int>)\n");
             } else if (timing && parsed < 7) {
-                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
+                printf(
+                    "Invalid Command - expected: set <channel:int> <addr:int>  "
+                    "<start_point:double> <end_point:double> <rate:double> "
+                    "<time:int>\n");
             } else {
                 set_ins(ad9959.sweep_type, channel, addr, start, end, rate,
                         div);
@@ -757,6 +784,7 @@ int main() {
     dma = dma_claim_unused_channel(true);
 
     // put chip in a known state
+    ad9959.ref_clk = 125 * MHZ;
     init_pin(PIN_RESET);
     reset();
 
