@@ -1,124 +1,48 @@
 #include "ad9959.h"
 
-ad9959_config ad9959_get_default_config() {
-    ad9959_config c;
-
-    // TODO: find a better way to do this?
-    // its probably fin actually
-
-    // 2 wire spi mode with all channels selected
-    memcpy(c.csr, "\x00\xf2", 2);
-
+void ad9959_default_config() {
     // PLL multiplier of x4
-    memcpy(c.fr1, "\x01\x90\x00\x00", 4);
+    uint8_t fr1[] = {0x01, 0x90, 0x00, 0x00};
+    spi_write_blocking(spi1, fr1, 4);
 
     // nothing in FR2
-    memcpy(c.fr2, "\x02\x00\x00", 3);
+    uint8_t fr2[] = {0x02, 0x00, 0x00};
+    spi_write_blocking(spi1, fr2, 3);
 
+    uint8_t cfr[] = {0x03, 0x00, 0x03, 0x04};
+    uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
+    uint8_t asf[] = {0x05, 0x00, 0x00};
+    uint8_t pow[] = {0x06, 0x00, 0x00, 0x00};
     for (int i = 0; i < 4; i++) {
         // select the channel
-        memcpy(c.cfr[i], "\x03\x00\x03\x04", 4);
-
-        // all channel registers initialized to zero
-        memcpy(c.cftw0[i], "\x04\x00\x00\x00\x00", 5);
-        memcpy(c.cpow0[i], "\x05\x00\x00", 3);
-        memcpy(c.acr[i], "\x06\x00\x00\x00", 4);
+        uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x2};
+        spi_write_blocking(spi1, csr, 2);
+        spi_write_blocking(spi1, cfr, 4);
+        spi_write_blocking(spi1, ftw, 5);
+        spi_write_blocking(spi1, asf, 3);
+        spi_write_blocking(spi1, pow, 4);
     }
 
-    c.ref_clk = 125 * MHZ;
-    c.pll_mult = 4;
-    c.sys_clk = c.ref_clk * c.pll_mult;
-    c.sweep_type = -1;
-
-    c.channels = 1;
-
-    return c;
 }
 
-void ad9959_config_mode(ad9959_config* c, uint type, uint no_dwell) {
-    c->sweep_type = type;
-
-    // zero out the modulation mode bits
-    c->fr1[2] &= 0b11111100;
-
-    for (int i = 0; i < 4; i++) {
-        c->cfr[i][1] = (type << 6);
-        c->cfr[i][2] = (no_dwell << 7) | ((type ? 1 : 0) << 6) | 0b100011;
-        c->cfr[i][3] = 0b00010000;
-    }
-}
-
-uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq) {
+uint32_t ad9959_send_freq(ad9959_config* c, uint channel, double freq) {
     uint32_t ftw = (uint32_t)round(freq * 4294967296.l / c->sys_clk);
+
+    uint8_t buf[5];
+    buf[0] = 0x04;
 
     uint8_t* bytes = (uint8_t*)&ftw;
     for (int i = 0; i < 4; i++) {
         // 1 offset for the register address
-        c->cftw0[channel][i + 1] = bytes[3 - i];
+        buf[i + 1] = bytes[3 - i];
     }
+
+    uint8_t csr[] = {0x00, (1u << (channel + 4)) | 0x02};
+    spi_write_blocking(spi1, csr, 2);
+    spi_write_blocking(spi1, buf, 5);
 
     // for debugging
     return ftw;
-}
-
-// uint32_t ad9959_config_phase(ad9959_config* c, uint channel, double phase) {
-//     uint32_t pow = (uint32_t)round(phase / 360.0 * 16384.0);
-
-//     uint8_t* bytes = (uint8_t*)&pow;
-//     printf("PHASE OFFSET: ");
-//     for (int i = 0; i < 2; i++) {
-//         // 1 offset for the register address
-//         c->cpow0[channel][i + 1] = bytes[1 - i];
-//         printf("%02x ", bytes[1 - i]);
-//     }
-//     printf("\n");
-
-//     // for debugging
-//     return pow;
-// }
-
-uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp) {
-    uint32_t atw = (uint16_t)round(amp * 1023);
-
-    // amplitude multiplier bit
-    atw |= 0x1000;
-
-    memcpy(c->acr[channel] + 1, (uint8_t*)&atw, 3);
-
-    // for debugging
-    return atw;
-}
-
-void ad9959_config_pll_mult(ad9959_config* c, uint32_t val) {
-    c->pll_mult = val;
-    c->sys_clk = c->ref_clk * val;
-
-    // zero out the current pll multiplier
-    c->fr1[1] &= 0b10000011;
-    c->fr1[1] |= val << 2;
-
-    // VCO gain bit
-    // maybe should give the user more control?
-    if (c->sys_clk > 255) c->fr1[1] |= 0x80;
-}
-
-void ad9959_send_config(ad9959_config* c) {
-    spi_write_blocking(spi1, c->fr1, 4);
-    spi_write_blocking(spi1, c->fr2, 3);
-
-    for (int i = 0; i < 4; i++) {
-        uint8_t csr[] = {
-            0x00,
-            (1u << (i + 4)) | 0x02,
-        };
-        spi_write_blocking(spi1, csr, 2);
-        spi_write_blocking(spi1, c->cfr[i], 4);
-        spi_write_blocking(spi1, c->cftw0[i], 5);
-        spi_write_blocking(spi1, c->cpow0[i], 3);
-        spi_write_blocking(spi1, c->acr[i], 4);
-    }
-
-    spi_write_blocking(spi1, c->csr, 2);
 }
 
 void read_reg(uint8_t reg, size_t len, uint8_t* buf) {

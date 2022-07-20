@@ -12,13 +12,6 @@
 #include "pico/stdlib.h"
 
 typedef struct ad9959_config {
-    uint8_t csr[2];
-    uint8_t fr1[4];
-    uint8_t fr2[3];
-    uint8_t cfr[4][4];
-    uint8_t cftw0[4][5];
-    uint8_t cpow0[4][3];
-    uint8_t acr[4][4];
     double sys_clk;
     double ref_clk;
     uint32_t pll_mult;
@@ -26,17 +19,8 @@ typedef struct ad9959_config {
     uint channels;
 } ad9959_config;
 
-ad9959_config ad9959_get_default_config();
-
-void ad9959_config_mode(ad9959_config* c, uint type, uint no_dwell);
-
-void ad9959_config_pll_mult(ad9959_config* c, uint32_t val);
-uint32_t ad9959_config_freq(ad9959_config* c, uint channel, double freq);
-// uint32_t ad9959_config_phase(ad9959_config* c, uint channel, double phase);
-uint32_t ad9959_config_amp(ad9959_config* c, uint channel, double amp);
-
-void ad9959_send_config(ad9959_config* c);
-
+uint32_t ad9959_send_freq(ad9959_config* c, uint channel, double freq);
+void ad9959_default_config();
 void read_reg(uint8_t reg, size_t len, uint8_t* buf);
 void read_all();
 

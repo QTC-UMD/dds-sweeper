@@ -132,8 +132,13 @@ void reset() {
     gpio_put(PIN_RESET, 0);
     sleep_ms(1);
 
-    ad9959 = ad9959_get_default_config();
-    ad9959_send_config(&ad9959);
+    ad9959.ref_clk = 125 * MHZ;
+    ad9959.pll_mult = 4;
+    ad9959.sys_clk = ad9959.ref_clk * ad9959.pll_mult;
+    ad9959.sweep_type = -1;
+    ad9959.channels = 1;
+
+    ad9959_default_config();
 
     update();
 }
@@ -379,12 +384,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
         memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
     }
 
-    printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
-           channel_offset);
-    for (int i = 0; i < INS_SIZE; i++) {
-        printf("%02x ", ins[i]);
-    }
-    printf("\n");
+    // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
+    //        channel_offset);
+    // for (int i = 0; i < INS_SIZE; i++) {
+    //     printf("%02x ", ins[i]);
+    // }
+    // printf("\n");
 }
 
 // ============================================================================
@@ -408,6 +413,10 @@ void background() {
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
 
+        // set the initial channel select bits
+        uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
+        spi_write_blocking(spi1, csr, 2);
+
         // work aorund fake trigger
         // pio_sm_put(PIO_TIME, 0, 1000);
         pio_sm_put(PIO_TRIG, 0, 0x0f);
@@ -428,8 +437,7 @@ void background() {
                 spi_write_blocking(spi1, instructions + offset + 1,
                                    (INS_SIZE + 2) * ad9959.channels);
             } else {
-                spi_write_blocking(spi1, instructions + offset + 1,
-                                   INS_SIZE);
+                spi_write_blocking(spi1, instructions + offset + 1, INS_SIZE);
             }
 
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
@@ -516,8 +524,7 @@ void loop() {
         } else if (channel < 0 || channel > 3) {
             printf("Invalid Command - channel must be in range 0-3\n");
         } else {
-            uint64_t word = ad9959_config_freq(&ad9959, channel, freq);
-            ad9959_send_config(&ad9959);
+            uint64_t word = ad9959_send_freq(&ad9959, channel, freq);
             update();
 
             if (DEBUG) {
@@ -562,8 +569,8 @@ void loop() {
         } else {
             // could do more validation to make sure it is a valid
             // multiply/system clock freq
-            ad9959_config_pll_mult(&ad9959, mult);
-            ad9959_send_config(&ad9959);
+            uint8_t fr1[] = {0x01, mult << 2, 0x00, 0x00};
+            spi_write_blocking(spi1, fr1, 4);
             update();
 
             printf("ok\n");
@@ -624,7 +631,7 @@ void loop() {
         } else {
             uint8_t sizes[] = {12, 26, 27, 25};
             INS_SIZE = sizes[type];
-            ad9959_config_mode(&ad9959, type, 0);
+            ad9959.sweep_type = type;
             timing = _timing;
             printf("OK\n");
         }
