@@ -33,7 +33,7 @@
 static mutex_t status_mutex;
 static mutex_t wait_mutex;
 
-#define FLASH_TARGET_OFFSET (256 * 1024)
+#define FLASH_TABLE_OFFSET (256 * 1024)
 
 // STATUS flag
 #define STOPPED 0
@@ -163,20 +163,45 @@ void abort_run() {
 // Set Table Instructions
 // ============================================================================
 
+void save_to_flash(uint offset, uint8_t *buf, uint len) {
+    // grab 2 sectors
+    uint prev_sectors = offset / FLASH_SECTOR_SIZE;
+    uint8_t sectors[FLASH_SECTOR_SIZE * 2];
+    memcpy(sectors,
+           (uint8_t *)(XIP_BASE + FLASH_TABLE_OFFSET +
+                       prev_sectors * FLASH_SECTOR_SIZE),
+           FLASH_SECTOR_SIZE * 2);
+
+    // write instructino there
+    uint sector_offset = offset - prev_sectors * FLASH_SECTOR_SIZE;
+    memcpy(sectors + sector_offset, buf, len);
+
+    // write sectors to flash
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(FLASH_TABLE_OFFSET + prev_sectors, FLASH_SECTOR_SIZE * 2);
+    flash_range_program(FLASH_TABLE_OFFSET + prev_sectors * FLASH_SECTOR_SIZE,
+                        sectors, FLASH_SECTOR_SIZE * 2);
+    restore_interrupts(ints);
+}
+
 void set_ins(uint type, uint channel, uint addr, double s0, double e0,
              double rate, uint div) {
     uint8_t ins[30];
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
+    uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
+    uint8_t pmask = *((uint8_t *)(XIP_BASE + FLASH_TABLE_OFFSET + offset - 1));
+
     if (channel == 4 || channel == 5) {
-        instructions[offset - 1] = 0x00;
+        pmask = 0x00;
+        ins[0] = 0x00;
         if (channel == 5)
-            instructions[offset] = 0xff;
+            ins[1] = 0xff;
         else
-            instructions[offset] = 0x00;
+            ins[1] = 0x00;
+        save_to_flash(offset - 1, ins, 2);
         return;
     }
 
@@ -366,24 +391,29 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
 
         // setting profile pin trigger bits
         if (s0 <= e0 && ad9959.channels == 1) {
-            instructions[offset - 1] |= 0xff;
+            pmask |= 0xff;
         } else if (s0 <= e0) {
-            instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-
+            pmask |= (1u << channel) | (1u << (channel + 4));
         } else if (ad9959.channels == 1) {
-            instructions[offset - 1] |= 0x0f;
+            pmask |= 0x0f;
         } else {
-            instructions[offset - 1] &= ~(1u << (channel + 4));
-            instructions[offset - 1] |= 1u << channel;
+            pmask &= ~(1u << (channel + 4));
+            pmask |= 1u << channel;
         }
     }
 
-    memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
+    // printf("ADDR: %u - CHANNEL: %u - OFFSET: %u - COFFSET: %u - PMASK: %u\n",
+    //        addr, channel, offset, channel_offset, offset - 1);
+
+    // memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
+    save_to_flash(offset + channel_offset, ins, INS_SIZE);
+    save_to_flash(offset - 1, &pmask, 1);
 
     if (ad9959.channels > 1) {
         uint8_t csr[] = {
             0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
-        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
+        // memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
+        save_to_flash(offset + channel_offset + INS_SIZE, csr, 2);
     }
 
     // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
@@ -425,10 +455,18 @@ void background() {
         wait(0);
         triggers = 0;
 
+        uint8_t *ins = (uint8_t *)(XIP_BASE + FLASH_TABLE_OFFSET);
+
+        uint spi = dma_claim_unused_channel(true);
+        dma_channel_config c = dma_channel_get_default_config(spi);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_dreq(&c, spi_get_dreq(spi1, true));
+        dma_channel_configure(spi, &c, &spi_get_hw(spi1)->dr, NULL, 8, false);
+
         while (status != ABORTING) {
             // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) {
-                if (instructions[offset + 1]) {
+            if (ins[offset] == 0x00) {
+                if (ins[offset + 1]) {
                     i = 0;
                     offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
                 } else
@@ -436,19 +474,24 @@ void background() {
             }
 
             if (ad9959.channels > 1) {
-                spi_write_blocking(spi1, instructions + offset + 1,
-                                   (INS_SIZE + 2) * ad9959.channels);
+                dma_channel_transfer_from_buffer_now(
+                    spi, ins + offset + 1, (INS_SIZE + 2) * ad9959.channels);
+                // spi_write_blocking(spi1, ins + offset + 1,
+                //                    (INS_SIZE + 2) * ad9959.channels);
             } else {
-                spi_write_blocking(spi1, instructions + offset + 1, INS_SIZE);
+                dma_channel_transfer_from_buffer_now(spi, ins + offset + 1,
+                                                     INS_SIZE);
+                // spi_write_blocking(spi1, ins + offset + 1, INS_SIZE);
             }
 
-            pio_sm_put(PIO_TRIG, 0, instructions[offset]);
+            pio_sm_put(PIO_TRIG, 0,
+                       *(uint8_t *)(XIP_BASE + FLASH_TABLE_OFFSET + offset));
 
             if (i == 1 && timing) {
                 multicore_fifo_push_blocking(1);
             }
 
-            offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+            offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
 
             wait(0);
         }
@@ -492,9 +535,9 @@ void loop() {
     } else if (strncmp(readstring, "save", 4) == 0) {
         uint32_t ints = save_and_disable_interrupts();
         printf("Erasing...\n");
-        flash_range_erase(FLASH_TARGET_OFFSET, MAX_SIZE);
+        flash_range_erase(FLASH_TABLE_OFFSET, MAX_SIZE);
         printf("Programming...\n");
-        flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
+        flash_range_program(FLASH_TABLE_OFFSET, instructions, MAX_SIZE);
         restore_interrupts(ints);
         printf("ok\n");
     }
@@ -512,9 +555,9 @@ void loop() {
         printf("ok\n");
     } else if (strncmp(readstring, "load", 4) == 0) {
         for (int j = 0; j < MAX_SIZE; j++) {
-            instructions[j] = ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET))[j];
+            instructions[j] = ((uint8_t *)(XIP_BASE + FLASH_TABLE_OFFSET))[j];
         }
-        for (int j = 0; j < 100; j++) {
+        for (int j = 0; j < 500; j++) {
             printf("%02x ", instructions[j]);
         }
         printf("\n");
