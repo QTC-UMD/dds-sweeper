@@ -186,7 +186,7 @@ void save_to_flash(uint offset, uint8_t *buf, uint len) {
 
 void set_ins(uint type, uint channel, uint addr, double s0, double e0,
              double rate, uint div) {
-    uint8_t ins[30];
+    uint8_t ins[35];
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
     uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * addr + 1;
@@ -406,14 +406,16 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
     //        addr, channel, offset, channel_offset, offset - 1);
 
     // memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
-    save_to_flash(offset + channel_offset, ins, INS_SIZE);
     save_to_flash(offset - 1, &pmask, 1);
 
     if (ad9959.channels > 1) {
         uint8_t csr[] = {
             0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
         // memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
-        save_to_flash(offset + channel_offset + INS_SIZE, csr, 2);
+        memcpy(ins + INS_SIZE, csr, 2);
+        save_to_flash(offset + channel_offset, ins, INS_SIZE + 2);
+    } else {
+        save_to_flash(offset + channel_offset, ins, INS_SIZE);
     }
 
     // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
