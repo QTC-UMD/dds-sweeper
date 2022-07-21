@@ -168,8 +168,11 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
     uint8_t ins[30];
 
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-    uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * addr + 1;
+    uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
+
+    if (offset + channel_offset + INS_SIZE + 2 >= MAX_SIZE)
+        panic("NOT ENOUGH MEMORY\n");
 
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
@@ -406,20 +409,19 @@ void background() {
 
     while (true) {
         // wait for the bat-signal
-        uint hwstart = multicore_fifo_pop_blocking();
+        multicore_fifo_pop_blocking();
 
         set_status(RUNNING);
 
         int i = 0;
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-        uint offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+        uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
 
         // set the initial channel select bits
         uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
         spi_write_blocking(spi1, csr, 2);
 
         // work aorund fake trigger
-        // pio_sm_put(PIO_TIME, 0, 1000);
         pio_sm_put(PIO_TRIG, 0, 0x0f);
         pio_sm_put(PIO_TIME, 0, 10);
         wait(0);
@@ -430,7 +432,7 @@ void background() {
             if (instructions[offset] == 0x00) {
                 if (instructions[offset + 1]) {
                     i = 0;
-                    offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+                    offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
                 } else
                     break;
             }
@@ -448,7 +450,7 @@ void background() {
                 multicore_fifo_push_blocking(1);
             }
 
-            offset = ((INS_SIZE + csrs) * ad9959.channels + 1) * (i++);
+            offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
 
             wait(0);
         }
