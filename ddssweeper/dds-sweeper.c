@@ -168,20 +168,30 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
              double rate, uint div) {
     uint8_t ins[30];
 
+    // number of times the CSR register will need be written in this step
     uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
+    // offset to the beginning of the step this instruction is in
+    // add 1 to skip past the profile pin mask in the first byte of the step
     uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * addr + 1;
+    // offset from the beginning of this step to the instruction for this
+    // channel
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
+    // check there is enough space for this instruction
     uint tspace = timing ? TIMERS * 4 : 0;
-    if (offset + channel_offset + INS_SIZE + 2 + tspace >= MAX_SIZE)
+    if (offset + channel_offset + INS_SIZE + 2 + tspace >= MAX_SIZE) {
         printf("Invalid Address\n");
         return;
+    }
 
+    // check if this is a flow control instruction
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
         if (channel == 5)
+            // repeate instrcution
             instructions[offset] = 0xff;
         else
+            // end instruction
             instructions[offset] = 0x00;
         return;
     }
@@ -190,24 +200,31 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
         // SINGLE TONE
         uint32_t ftw, asf, pow;
 
+        // profile pins do not matter for single tone mode, but the pio program
+        // still expects a nonzero value for the profile pin mask
         instructions[offset - 1] |= 0x01;
 
+        // register addresses
         ins[0] = 0x04;
         ins[5] = 0x05;
         ins[8] = 0x06;
 
+        // calculate tuning values from real values
         ftw = round(s0 / ad9959.sys_clk * 4294967296.0);
+        asf = round(e0 * 1023);
+        pow = round(rate / 360.0 * 16384.0);
+
+        // validate parameters
+        if (asf < 1) asf = 1;
+        if (pow > 16384 - 1) pow = 16384 - 1;
+
+        // bit shifts to align to AD9959 register map
         ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
               ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
-
-        asf = round(e0 * 1023);
-        if (asf < 1) asf = 1;
         asf = ((asf & 0xff) << 16) | (asf & 0xff00) | 0x1000;
-
-        pow = round(rate / 360.0 * 16384.0);
-        if (pow > 16384 - 1) pow = 16384 - 1;
         pow = ((pow & 0xff) << 8) | ((pow & 0xff00) >> 8);
 
+        // write instruction
         memcpy(ins + 1, (uint8_t *)&ftw, 4);
         memcpy(ins + 6, (uint8_t *)&pow, 2);
         memcpy(ins + 9, (uint8_t *)&asf, 3);
@@ -274,7 +291,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
 
             ins[0] = 0x04;
             ins[5] = 0x07;
-            // ??
+            // if there is a problem with frequency down sweeps this could be a
+            // culprit. If the divider is too slow to quickly go up before going
+            // back down, might need to set it to 0x01 for downward sweeps
             ins[6] = div;
             ins[7] = div;
             ins[8] = 0x08;
@@ -290,7 +309,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
 
             if (rword < 1) rword = 1;
 
-            // gross bit shifting to force big endianness
+            // bit shifting to flip endianness
             sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
                     ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
             eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
@@ -298,6 +317,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
             rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
                     ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
 
+            // write instruction
             if (s0 <= e0) {
                 // sweep up
                 lower = sword;
@@ -325,7 +345,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
 
             ins[0] = 0x05;
             ins[3] = 0x07;
-            // ??
+            // see not in freq sweeps
             ins[4] = div;
             ins[5] = div;
             ins[6] = 0x08;
@@ -338,11 +358,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
             e0 = round(e0 / 360.0 * 16384.0);
             pow = round(rate / 360.0 * 16384.0);
 
+            // validate params
             if (pow > 16384 - 1) pow = 16384 - 1;
             if (s0 > 16384 - 1) s0 = 16384 - 1;
             if (e0 > 16384 - 1) e0 = 16384 - 1;
 
-            // gross bit shifting to force big endianness
+            // bit shifting to flip endianness
             pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
 
             if (s0 <= e0) {
@@ -385,9 +406,18 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
         }
     }
 
+    // write the instruction to main memory
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
+    // write the CSR commands to select the correct channel
     if (ad9959.channels > 1) {
+        // for some reason when I wrote this I decided it was easier to write
+        // the CSR for the next instruction at the end of this one, instead of
+        // writing the CSR for this instruction at the beginning of it
+
+        // it may make the table more likely to survive an early trigger, since
+        // an early trigger at the end of an instruction would just interrupt
+        // the channel select bits, which do not need an update signal anyway
         uint8_t csr[] = {
             0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
         memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
@@ -496,14 +526,6 @@ void loop() {
     } else if (strncmp(readstring, "abort", 5) == 0) {
         abort_run();
         printf("ok\n");
-    } else if (strncmp(readstring, "save", 4) == 0) {
-        uint32_t ints = save_and_disable_interrupts();
-        printf("Erasing...\n");
-        flash_range_erase(FLASH_TARGET_OFFSET, MAX_SIZE);
-        printf("Programming...\n");
-        flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
-        restore_interrupts(ints);
-        printf("ok\n");
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
@@ -518,14 +540,19 @@ void loop() {
         read_all();
         printf("ok\n");
     } else if (strncmp(readstring, "load", 4) == 0) {
-        for (int j = 0; j < MAX_SIZE; j++) {
-            instructions[j] = ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET))[j];
-        }
-        for (int j = 0; j < 100; j++) {
-            printf("%02x ", instructions[j]);
-        }
-        printf("\n");
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+        memcpy(instructions, ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET)),
+               MAX_SIZE);
+#pragma GCC diagnostic pop
+        printf("ok\n");
+    } else if (strncmp(readstring, "save", 4) == 0) {
+        uint32_t ints = save_and_disable_interrupts();
+        printf("Erasing...\n");
+        flash_range_erase(FLASH_TARGET_OFFSET, MAX_SIZE);
+        printf("Programming...\n");
+        flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
+        restore_interrupts(ints);
         printf("ok\n");
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
@@ -533,9 +560,9 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u", &channels);
 
         if (parsed < 1) {
-            printf("Invalid Command - expected: setchannels <num:int>\n");
+            printf("Missing Argument - expected: setchannels <num:int>\n");
         } else if (channels < 1 || channels > 4) {
-            printf("Invalid Command - expected: num must be in range 0-3\n");
+            printf("Invalid Channels - expected: num must be in range 0-3\n");
         } else {
             ad9959.channels = channels;
             printf("ok\n");
@@ -548,10 +575,10 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
         if (parsed < 2) {
             printf(
-                "Invalid Command - too few arguments - expected: setfreq "
+                "Missing Argument - too few arguments - expected: setfreq "
                 "<channel:int> <frequency:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Command - num must be in range 0-3\n");
+            printf("Invalid Channel - num must be in range 0-3\n");
         } else {
             uint64_t word = send_freq(&ad9959, channel, freq);
             update();
@@ -571,10 +598,10 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
         if (parsed < 2) {
             printf(
-                "Invalid Command - too few arguments - expected: setphase "
+                "Missing Argument - too few arguments - expected: setphase "
                 "<channel:int> <frequency:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Command - channel must be in range 0-3\n");
+            printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
             double resp = send_phase(channel, phase);
             update();
@@ -593,10 +620,10 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &amp);
         if (parsed < 2) {
             printf(
-                "Invalid Command - too few arguments - expected: setamp "
-                "<channel:int> <amp:double>\n");
+                "Missing Argument - expected: setamp <channel:int> "
+                "<amp:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Command - channel must be in range 0-3\n");
+            printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
             double resp = send_amp(channel, amp);
             update();
@@ -613,7 +640,11 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u", &mult);
 
         if (parsed < 1) {
-            printf("Invalid Command - expected: setmult <pll_mult:int>\n");
+            printf("Missing Argument - expected: setmult <pll_mult:int>\n");
+        } else if (mult != 1 || !(mult >= 4 && mult <= 20)) {
+            printf(
+                "Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
+
         } else {
             // could do more validation to make sure it is a valid
             // multiply/system clock freq
@@ -629,10 +660,11 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u %u", &src, &freq);
         if (parsed < 2) {
             printf(
-                "Invalid Command - expected: setclock <mode:int> <freq:int>\n");
+                "Missing Argument - expected: setclock <mode:int> "
+                "<freq:int>\n");
         } else {
             if (src > 1) {
-                printf("Invalid Command - mode must be in range 0-1\n");
+                printf("Invalid Mode - mode must be in range 0-1\n");
             } else {
                 // Set new clock frequency
                 if (src == 0) {
@@ -659,8 +691,7 @@ void loop() {
                     ad9959.sys_clk = freq * ad9959.pll_mult;
                     gpio_deinit(PIN_CLOCK);
                     if (DEBUG)
-                        printf(
-                            "Pico no longer providing ref_clock to AD9959\n");
+                        printf("AD9959 requires external reference clock\n");
                     printf("ok\n");
                 }
             }
@@ -673,10 +704,9 @@ void loop() {
 
         if (parsed < 2) {
             printf(
-                "Invalid Command - too few arguments - expected: mode "
-                "<type:int> <timing:int>\n");
+                "Missing Argument - expected: mode <type:int> <timing:int>\n");
         } else if (type > 3) {
-            printf("Invalid Command - table type must be in range 0-3\n");
+            printf("Invalid Type - table type must be in range 0-3\n");
         } else {
             uint8_t sizes[] = {12, 26, 27, 25};
             INS_SIZE = sizes[type];
@@ -684,25 +714,29 @@ void loop() {
             timing = _timing;
             printf("OK\n");
         }
-
     } else if (strncmp(readstring, "set ", 4) == 0) {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
-        // <rate:double> <time:int>
+        // <rate:double> (<time:int>)
 
         if (ad9959.sweep_type == 0) {
             // SINGLE TONE MODE
-            uint channel, addr;
-            uint32_t time;
+            uint32_t channel, addr, time;
             double freq, amp, phase;
             int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
                                 &channel, &addr, &freq, &amp, &phase, &time);
 
             if (!timing && parsed < 5) {
-                printf("Invalid Command - expected: set <> <>\n");
+                printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
+                    "<frequency:double> <amplitude:double> <phase:double> "
+                    "(<time:int>)\n");
             } else if (timing && parsed < 6) {
-                printf("Invalid Command - expected: set <> <> nbeed a time!\n");
+                printf(
+                    "No Time Given - expected: set <channel:int> <addr:int> "
+                    "<frequency:double> <amplitude:double> <phase:double> "
+                    "<time:int>\n");
             } else {
-                set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
+                // set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
                 if (timing) {
                     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
                         time - 10;
@@ -710,11 +744,10 @@ void loop() {
             }
 
         } else if (ad9959.sweep_type <= 3) {
-            // AMP SWEEP
+            // SWEEP MODE
             // set <channel:int> <addr:int> <start_point:double>
-            // <end_point:double> <rate:double> <div:int>
-            uint channel, addr, div;
-            uint32_t time;
+            // <end_point:double> <rate:double> <div:int> (<time:int>)
+            uint32_t channel, addr, div, time;
             double start, end, rate;
             int parsed =
                 sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel,
@@ -722,12 +755,12 @@ void loop() {
 
             if (parsed < 6) {
                 printf(
-                    "Invalid Command - expected: set <channel:int> <addr:int> "
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <rate:double> "
                     "(<time:int>)\n");
             } else if (timing && parsed < 7) {
                 printf(
-                    "Invalid Command - expected: set <channel:int> <addr:int>  "
+                    "No Time Given - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <rate:double> "
                     "<time:int>\n");
             } else {
@@ -741,21 +774,26 @@ void loop() {
 
         } else {
             printf(
-                "Invalid Command - Please set operation type using \'mode\' "
-                "first.\n");
+                "Invalid Command - \'mode\' must be defined before "
+                "instructions can be set\n");
         }
-
     } else if (strncmp(readstring, "start", 5) == 0) {
         if (ad9959.sweep_type == -1) {
-            printf("Please select an operating mode using \'mode\' first.\n");
+            printf(
+                "Invalid Command - \'mode\' must be defined before "
+                "a table can be started\n");
         } else {
+            // start the other core
             multicore_fifo_push_blocking(0);
 
             if (timing) {
+                // if pico is timing itself, use dma to send all the wait
+                // lengths to the timer pio program
                 dma_channel_config c = dma_channel_get_default_config(dma);
                 channel_config_set_dreq(&c, DREQ_PIO1_TX0);
                 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
 
+                // make sure the first insturction has been sent
                 multicore_fifo_pop_blocking();
 
                 dma_channel_configure(dma, &c, &PIO_TIME->txf[0],
@@ -766,7 +804,7 @@ void loop() {
             printf("OK\n");
         }
     } else {
-        printf("Unrecognized command: \"%s\"\n", readstring);
+        printf("Unrecognized Command: \"%s\"\n", readstring);
     }
 }
 
