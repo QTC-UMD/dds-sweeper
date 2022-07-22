@@ -45,7 +45,8 @@ int status = STOPPED;
 #define UPDATE 0
 
 #define MAX_SIZE 249856
-#define TIMING_OFFSET 187500
+#define TIMERS 5000
+#define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
 // ============================================================================
 // global variables
@@ -171,8 +172,10 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
     uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * addr + 1;
     uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
 
-    if (offset + channel_offset + INS_SIZE + 2 >= MAX_SIZE)
-        panic("NOT ENOUGH MEMORY\n");
+    uint tspace = timing ? TIMERS * 4 : 0;
+    if (offset + channel_offset + INS_SIZE + 2 + tspace >= MAX_SIZE)
+        printf("Invalid Address\n");
+        return;
 
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
@@ -280,9 +283,10 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
             ins[23] = 0x03;
 
             // convert from frequencies to tuning words
-            uint32_t sword = round(s0 / ad9959.sys_clk * 4294967296.0);
-            uint32_t eword = round(e0 / ad9959.sys_clk * 4294967296.0);
-            uint32_t rword = round(rate / ad9959.sys_clk * 4294967296.0);
+            double conv = 4294967296.0 / ad9959.sys_clk;
+            uint32_t sword = round(s0 * conv);
+            uint32_t eword = round(e0 * conv);
+            uint32_t rword = round(rate * conv);
 
             if (rword < 1) rword = 1;
 
@@ -432,7 +436,8 @@ void background() {
             if (instructions[offset] == 0x00) {
                 if (instructions[offset + 1]) {
                     i = 0;
-                    offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
+                    offset =
+                        (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
                 } else
                     break;
             }
@@ -753,9 +758,8 @@ void loop() {
 
                 multicore_fifo_pop_blocking();
 
-                // make this not hardcoded at 15000?
                 dma_channel_configure(dma, &c, &PIO_TIME->txf[0],
-                                      instructions + TIMING_OFFSET, 15000,
+                                      instructions + TIMING_OFFSET, TIMERS,
                                       true);
             }
 
