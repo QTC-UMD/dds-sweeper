@@ -48,9 +48,9 @@ int status = STOPPED;
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
-// ============================================================================
+// ================================================================================================
 // global variables
-// ============================================================================
+// ================================================================================================
 ad9959_config ad9959;
 char readstring[256];
 bool DEBUG = true;
@@ -63,9 +63,9 @@ uint dma;
 uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
 
-// ============================================================================
+// ================================================================================================
 // Setup
-// ============================================================================
+// ================================================================================================
 
 void init_pin(uint pin) {
     gpio_init(pin);
@@ -89,10 +89,8 @@ void set_status(int new_status) {
 void measure_freqs(void) {
     // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
     // License
-    uint f_pll_sys =
-        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
-    uint f_pll_usb =
-        frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
+    uint f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
+    uint f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
     uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
     uint f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
     uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
@@ -124,9 +122,9 @@ void readline() {
     }
 }
 
-// ============================================================================
+// ================================================================================================
 // Interact with AD9959
-// ============================================================================
+// ================================================================================================
 
 void update() { pio_sm_put(PIO_TRIG, 0, UPDATE); }
 
@@ -160,12 +158,25 @@ void abort_run() {
     }
 }
 
-// ============================================================================
+// ================================================================================================
 // Set Table Instructions
-// ============================================================================
+// ================================================================================================
 
-void set_ins(uint type, uint channel, uint addr, double s0, double e0,
-             double rate, uint div) {
+void set_time(uint32_t addr, uint32_t time) {
+    printf("time : %u\n", time);
+    if (time < 10) {
+        if (DEBUG) {
+            printf(
+                "Too Few Clock Cycles - the pico must wait at least 10 clock cycles between "
+                "instructions when in internal trigger mode.\n");
+        }
+        return;
+    }
+
+    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = time - 10;
+}
+
+void set_ins(uint type, uint channel, uint addr, double s0, double e0, double rate, uint div) {
     uint8_t ins[30];
 
     // number of times the CSR register will need be written in this step
@@ -219,8 +230,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
         if (pow > 16384 - 1) pow = 16384 - 1;
 
         // bit shifts to align to AD9959 register map
-        ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) |
-              ((ftw & 0xff0000) >> 8) | ((ftw & 0xff000000) >> 24);
+        ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) | ((ftw & 0xff0000) >> 8) |
+              ((ftw & 0xff000000) >> 24);
         asf = ((asf & 0xff) << 16) | (asf & 0xff00) | 0x1000;
         pow = ((pow & 0xff) << 8) | ((pow & 0xff00) >> 8);
 
@@ -310,12 +321,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
             if (rword < 1) rword = 1;
 
             // bit shifting to flip endianness
-            sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) |
-                    ((sword & 0xff0000) >> 8) | ((sword & 0xff000000) >> 24);
-            eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) |
-                    ((eword & 0xff0000) >> 8) | ((eword & 0xff000000) >> 24);
-            rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) |
-                    ((rword & 0xff0000) >> 8) | ((rword & 0xff000000) >> 24);
+            sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) | ((sword & 0xff0000) >> 8) |
+                    ((sword & 0xff000000) >> 24);
+            eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) | ((eword & 0xff0000) >> 8) |
+                    ((eword & 0xff000000) >> 24);
+            rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) | ((rword & 0xff0000) >> 8) |
+                    ((rword & 0xff000000) >> 24);
 
             // write instruction
             if (s0 <= e0) {
@@ -418,8 +429,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
         // it may make the table more likely to survive an early trigger, since
         // an early trigger at the end of an instruction would just interrupt
         // the channel select bits, which do not need an update signal anyway
-        uint8_t csr[] = {
-            0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
+        uint8_t csr[] = {0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
         memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
     }
 
@@ -431,9 +441,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0,
     // printf("\n");
 }
 
-// ============================================================================
+// ================================================================================================
 // Main Tasks
-// ============================================================================
+// ================================================================================================
 
 void background() {
     // let other core know we ready
@@ -466,8 +476,7 @@ void background() {
             if (instructions[offset] == 0x00) {
                 if (instructions[offset + 1]) {
                     i = 0;
-                    offset =
-                        (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
+                    offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
                 } else
                     break;
             }
@@ -542,8 +551,7 @@ void loop() {
     } else if (strncmp(readstring, "load", 4) == 0) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overread"
-        memcpy(instructions, ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET)),
-               MAX_SIZE);
+        memcpy(instructions, ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET)), MAX_SIZE);
 #pragma GCC diagnostic pop
         printf("ok\n");
     } else if (strncmp(readstring, "save", 4) == 0) {
@@ -642,8 +650,7 @@ void loop() {
         if (parsed < 1) {
             printf("Missing Argument - expected: setmult <pll_mult:int>\n");
         } else if (mult != 1 || !(mult >= 4 && mult <= 20)) {
-            printf(
-                "Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
+            printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
 
         } else {
             // could do more validation to make sure it is a valid
@@ -671,13 +678,10 @@ void loop() {
                     if (set_sys_clock_khz(freq / 1000, false)) {
                         ad9959.ref_clk = freq;
                         ad9959.sys_clk = freq * ad9959.pll_mult;
-                        clock_configure(
-                            clk_peri, 0,
-                            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
-                            125 * MHZ, 125 * MHZ);
-                        clock_gpio_init(
-                            PIN_CLOCK,
-                            CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
+                        clock_configure(clk_peri, 0,
+                                        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
+                                        125 * MHZ);
+                        clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
                         stdio_init_all();
                         printf("ok\n");
                         // clock_status = INTERNAL;
@@ -690,8 +694,7 @@ void loop() {
                     ad9959.ref_clk = freq;
                     ad9959.sys_clk = freq * ad9959.pll_mult;
                     gpio_deinit(PIN_CLOCK);
-                    if (DEBUG)
-                        printf("AD9959 requires external reference clock\n");
+                    if (DEBUG) printf("AD9959 requires external reference clock\n");
                     printf("ok\n");
                 }
             }
@@ -703,8 +706,7 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u %u %u", &type, &_timing);
 
         if (parsed < 2) {
-            printf(
-                "Missing Argument - expected: mode <type:int> <timing:int>\n");
+            printf("Missing Argument - expected: mode <type:int> <timing:int>\n");
         } else if (type > 3) {
             printf("Invalid Type - table type must be in range 0-3\n");
         } else {
@@ -722,8 +724,8 @@ void loop() {
             // SINGLE TONE MODE
             uint32_t channel, addr, time;
             double freq, amp, phase;
-            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u",
-                                &channel, &addr, &freq, &amp, &phase, &time);
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr, &freq,
+                                &amp, &phase, &time);
 
             if (!timing && parsed < 5) {
                 printf(
@@ -738,8 +740,7 @@ void loop() {
             } else {
                 // set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
                 if (timing) {
-                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
-                        time - 10;
+                    set_time(addr, time);
                 }
             }
 
@@ -749,9 +750,8 @@ void loop() {
             // <end_point:double> <rate:double> <div:int> (<time:int>)
             uint32_t channel, addr, div, time;
             double start, end, rate;
-            int parsed =
-                sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel,
-                       &addr, &start, &end, &rate, &div, &time);
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel, &addr, &start,
+                                &end, &rate, &div, &time);
 
             if (parsed < 6) {
                 printf(
@@ -764,11 +764,9 @@ void loop() {
                     "<start_point:double> <end_point:double> <rate:double> "
                     "<time:int>\n");
             } else {
-                set_ins(ad9959.sweep_type, channel, addr, start, end, rate,
-                        div);
+                set_ins(ad9959.sweep_type, channel, addr, start, end, rate, div);
                 if (timing) {
-                    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) =
-                        time - 10;
+                    set_time(addr, time);
                 }
             }
 
@@ -796,9 +794,8 @@ void loop() {
                 // make sure the first insturction has been sent
                 multicore_fifo_pop_blocking();
 
-                dma_channel_configure(dma, &c, &PIO_TIME->txf[0],
-                                      instructions + TIMING_OFFSET, TIMERS,
-                                      true);
+                dma_channel_configure(dma, &c, &PIO_TIME->txf[0], instructions + TIMING_OFFSET,
+                                      TIMERS, true);
             }
 
             printf("OK\n");
@@ -814,8 +811,7 @@ int main() {
     clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
     // attatch spi to system clock
-    clock_configure(clk_peri, 0,
-                    CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
+    clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
 
     // turn on LED
