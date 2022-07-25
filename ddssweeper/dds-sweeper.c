@@ -1,3 +1,26 @@
+/*
+#######################################################################
+#                                                                     #
+# dds-sweeper.c                                                       #
+#                                                                     #
+# Copyright 2022                                                      #
+#                                                                     #
+# Serial communication code based on the PineBlaster and PrawnBlaster #
+#   https://github.com/labscript-suite/pineblaster                    #
+#   Copyright 2013, Christopher Billington                            #
+#   https://github.com/labscript-suite/prawnblaster                   #
+#   Copyright 2013, Philip Starkey                                    #
+#                                                                     #
+# This file is used to flash a Raspberry Pi Pico microcontroller      #
+# prototyping board to create a DDS-Sweeper (see readme.txt and       #
+# http://hardware.labscriptsuite.org).                                #
+# This file is licensed under the Simplified BSD License.             #
+# See the license.txt file for the full license.                      #
+#                                                                     #
+#######################################################################
+*/
+
+
 #include <stdio.h>
 #include <string.h>
 
