@@ -11,16 +11,16 @@ void ad9959_default_config() {
 
     uint8_t cfr[] = {0x03, 0x00, 0x03, 0x04};
     uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
-    uint8_t asf[] = {0x05, 0x00, 0x00};
-    uint8_t pow[] = {0x06, 0x00, 0x00, 0x00};
+    uint8_t pow[] = {0x05, 0x00, 0x00};
+    uint8_t acr[] = {0x06, 0x00, 0x00, 0x00};
     for (int i = 0; i < 4; i++) {
         // select the channel
         uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x2};
         spi_write_blocking(spi1, csr, 2);
         spi_write_blocking(spi1, cfr, 4);
         spi_write_blocking(spi1, ftw, 5);
-        spi_write_blocking(spi1, asf, 3);
-        spi_write_blocking(spi1, pow, 4);
+        spi_write_blocking(spi1, pow, 3);
+        spi_write_blocking(spi1, acr, 4);
     }
 }
 

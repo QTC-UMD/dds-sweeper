@@ -20,7 +20,6 @@
 #######################################################################
 */
 
-
 #include <stdio.h>
 #include <string.h>
 
@@ -81,7 +80,7 @@ bool timing = false;
 
 uint triggers;
 
-uint dma;
+uint timer_dma;
 
 uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
@@ -186,15 +185,15 @@ void abort_run() {
 // ================================================================================================
 
 void set_time(uint32_t addr, uint32_t time) {
-    printf("time : %u\n", time);
-    if (time < 10) {
-        if (DEBUG) {
-            printf(
-                "Too Few Clock Cycles - the pico must wait at least 10 clock cycles between "
-                "instructions when in internal trigger mode.\n");
-        }
-        return;
-    }
+    // printf("time : %u\n", time);
+    // if (time < 10) {
+    //     if (DEBUG) {
+    //         printf(
+    //             "Too Few Clock Cycles - the pico must wait at least 10 clock cycles between "
+    //             "instructions when in internal trigger mode.\n");
+    //     }
+    //     return;
+    // }
 
     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = time - 10;
 }
@@ -262,6 +261,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
         memcpy(ins + 1, (uint8_t *)&ftw, 4);
         memcpy(ins + 6, (uint8_t *)&pow, 2);
         memcpy(ins + 9, (uint8_t *)&asf, 3);
+
+        instructions[offset - 1] = 0x69;
     } else {
         // Not a single tone
         uint32_t lower, higher;
@@ -279,12 +280,15 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             ins[22] = 0x03;
 
             // calculations
-            s0 = round(s0 * 1023);
-            e0 = round(e0 * 1023);
-            asf = round(rate * 1023);
+            s0 = round(s0 * 1024);
+            e0 = round(e0 * 1024);
+            asf = round(rate * 1024);
 
             // validation
             if (asf < 1) asf = 1;
+            if (asf > 1023) asf = 1023;
+            if (s0 > 1023) s0 = 1023;
+            if (e0 > 1023) e0 = 1023;
 
             // bit alignment
             asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14);
@@ -325,9 +329,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             ins[0] = 0x04;
             ins[5] = 0x07;
-            // if there is a problem with frequency down sweeps this could be a
-            // culprit. If the divider is too slow to quickly go up before going
-            // back down, might need to set it to 0x01 for downward sweeps
             ins[6] = div;
             ins[7] = div;
             ins[8] = 0x08;
@@ -357,6 +358,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 lower = sword;
                 higher = eword;
 
+                ins[6] = 0x01;
                 memcpy(ins + 9, (uint8_t *)&rword, 4);
                 memcpy(ins + 14, "\x00\x00\x00\x00", 4);
                 memcpy(ins + 24, "\x80\x43\x10", 3);
@@ -366,6 +368,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 lower = eword;
                 higher = sword;
 
+                ins[7] = 0x01;
                 memcpy(ins + 9, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 14, (uint8_t *)&rword, 4);
                 memcpy(ins + 24, "\x80\x43\x00", 3);
@@ -379,7 +382,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             ins[0] = 0x05;
             ins[3] = 0x07;
-            // see not in freq sweeps
             ins[4] = div;
             ins[5] = div;
             ins[6] = 0x08;
@@ -405,6 +407,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 lower = (uint32_t)s0;
                 higher = (uint32_t)e0;
 
+                ins[6] = 0x01;
                 memcpy(ins + 7, (uint8_t *)&pow, 4);
                 memcpy(ins + 12, "\x00\x00\x00\x00", 4);
                 memcpy(ins + 22, "\xc0\x43\x10", 3);
@@ -414,6 +417,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 lower = (uint32_t)e0;
                 higher = (uint32_t)s0;
 
+                ins[7] = 0x01;
                 memcpy(ins + 7, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 12, (uint8_t *)&pow, 4);
                 memcpy(ins + 22, "\xc0\x43\x00", 3);
@@ -456,8 +460,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
         memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
     }
 
-    // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset,
-    //        channel_offset);
+    // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset, channel_offset);
     // for (int i = 0; i < INS_SIZE; i++) {
     //     printf("%02x ", ins[i]);
     // }
@@ -471,8 +474,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 void background() {
     // let other core know we ready
     multicore_fifo_push_blocking(0);
-
-    init_pin(10);
 
     while (true) {
         // wait for the bat-signal
@@ -521,7 +522,7 @@ void background() {
 
             wait(0);
         }
-        dma_channel_abort(dma);
+        dma_channel_abort(timer_dma);
         pio_sm_clear_fifos(PIO_TRIG, 0);
         pio_sm_clear_fifos(PIO_TIME, 0);
         set_status(STOPPED);
@@ -535,7 +536,7 @@ void loop() {
     if (DEBUG) printf("%s\n", readstring);
 
     if (strncmp(readstring, "version", 7) == 0) {
-        printf("version: %s\n", VERSION);
+        printf("%s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
         printf("%d\n", local_status);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
@@ -548,8 +549,7 @@ void loop() {
         measure_freqs();
         printf("ok\n");
     } else if (strncmp(readstring, "numtriggers", 11) == 0) {
-        printf("%u triggers recieved in last run\n", triggers);
-        printf("ok\n");
+        printf("%u\n", triggers);
     } else if (strncmp(readstring, "reset", 5) == 0) {
         abort_run();
         reset();
@@ -737,7 +737,7 @@ void loop() {
             INS_SIZE = sizes[type];
             ad9959.sweep_type = type;
             timing = _timing;
-            printf("OK\n");
+            printf("ok\n");
         }
     } else if (strncmp(readstring, "set ", 4) == 0) {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
@@ -761,7 +761,7 @@ void loop() {
                     "<frequency:double> <amplitude:double> <phase:double> "
                     "<time:int>\n");
             } else {
-                // set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
+                set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
                 if (timing) {
                     set_time(addr, time);
                 }
@@ -804,24 +804,27 @@ void loop() {
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");
         } else {
+            pio_sm_clear_fifos(PIO_TRIG, 0);
+            pio_sm_clear_fifos(PIO_TIME, 0);
+
             // start the other core
             multicore_fifo_push_blocking(0);
 
             if (timing) {
                 // if pico is timing itself, use dma to send all the wait
                 // lengths to the timer pio program
-                dma_channel_config c = dma_channel_get_default_config(dma);
+                dma_channel_config c = dma_channel_get_default_config(timer_dma);
                 channel_config_set_dreq(&c, DREQ_PIO1_TX0);
                 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
 
                 // make sure the first insturction has been sent
                 multicore_fifo_pop_blocking();
 
-                dma_channel_configure(dma, &c, &PIO_TIME->txf[0], instructions + TIMING_OFFSET,
-                                      TIMERS, true);
+                dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0],
+                                      instructions + TIMING_OFFSET, TIMERS, true);
             }
 
-            printf("OK\n");
+            printf("ok\n");
         }
     } else {
         printf("Unrecognized Command: \"%s\"\n", readstring);
@@ -865,7 +868,7 @@ int main() {
     timer_program_init(PIO_TIME, 0, offset, TRIGGER);
 
     // setup dma
-    dma = dma_claim_unused_channel(true);
+    timer_dma = dma_claim_unused_channel(true);
 
     // put chip in a known state
     ad9959.ref_clk = 125 * MHZ;
