@@ -65,15 +65,18 @@ Configures what mode the DDS-Sweeper is operating in
   A trigger value of `0` means the Sweeper is expecting external triggers. A value of `1` means the Sweeper will send its own triggers based on the times passed to the `set` command.
 
 
-* `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <div:int> (<time:int>)`:  
-Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `div` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` differe depending on the operating mode od the DDS-Sweeper  
-  - Single Tone Mode (mode 0)
-  - Amplitude Sweep (mode 1)  
-    `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proprtion of the maximum output amplitude. `delta` is the desired change in that propertion.
-  - Frequency Sweep (mode 2)  
-    `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the frequency resolution.
-  - Phase Sweep (mode 3)
-    `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
+* `set`:  
+Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in.
+  - Single Stepping (mode 0): `set <channel:int> <addr:int> <frequency:float> <amplitude:float> <phase:float> (<time:int>)`
+  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <div:int> (<time:int>)`
+
+    `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `div` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
+      - Amplitude Sweep (mode 1)  
+        `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proprtion of the maximum output amplitude. `delta` is the desired change in that propertion. For all three of those values there is minimum resolution of $\frac{1}{1024} \approx 0.09766\%$
+      - Frequency Sweep (mode 2)  
+        `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the frequency resolution.
+      - Phase Sweep (mode 3)
+        `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
 
   
 
@@ -95,10 +98,10 @@ Sets how many channels being used by the table mode. Uses the lowest channels fi
 
 
 * `save`:  
-Saves the current table to flash memory so that it can be recovered later.
+Saves the current table to nonvolatile memory so that it can be recovered later. 
 
 
-* `loads`:  
-Retrieves the table currently stored in flash and restores it in RAM so that it can be used again. A saved table must be loaded before it can be used.
+* `load`:  
+Retrieves the table currently stored in flash and restores it to RAM so that it can be used again. A saved table must be loaded before it can be used.
 
 
