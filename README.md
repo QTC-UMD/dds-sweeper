@@ -21,6 +21,8 @@ For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of oper
 
 The sweeper cannot doing anything while waiting for the initial start
 
+https://github.com/Iherrbenza/AD9959_Python
+
 ## Serial API
 Note: Commands must be terminated with `\n`.
 
