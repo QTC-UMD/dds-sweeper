@@ -507,15 +507,15 @@ void background() {
         spi_write_blocking(spi1, csr, 2);
 
         // work aorund fake trigger
-        // pio_sm_put(PIO_TRIG, 0, 0x0f);
-        // pio_sm_put(PIO_TIME, 0, 10);
-        // wait(0);
+        pio_sm_put(PIO_TRIG, 0, 0x0f);
+        pio_sm_put(PIO_TIME, 0, 10);
+        wait(0);
         triggers = 0;
 
         while (status != ABORTING) {
             if (i == num_ins) {
                 if (repeat) {
-                    i = 0;
+                    i = offset = 0;
                 } else {
                     break;
                 }
@@ -531,7 +531,7 @@ void background() {
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
             if (i == 0 && timing) {
-                multicore_fifo_push_blocking(num_ins);
+                multicore_fifo_push_timeout_us(num_ins, 1);
             }
 
             offset = step * ++i;
