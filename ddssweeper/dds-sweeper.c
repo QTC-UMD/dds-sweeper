@@ -507,9 +507,9 @@ void background() {
         spi_write_blocking(spi1, csr, 2);
 
         // work aorund fake trigger
-        pio_sm_put(PIO_TRIG, 0, 0x0f);
-        pio_sm_put(PIO_TIME, 0, 10);
-        wait(0);
+        // pio_sm_put(PIO_TRIG, 0, 0x0f);
+        // pio_sm_put(PIO_TIME, 0, 10);
+        // wait(0);
         triggers = 0;
 
         while (status != ABORTING) {
@@ -783,6 +783,7 @@ void loop() {
                 }
             }
 
+            printf("ok\n");
         } else if (ad9959.sweep_type <= 3) {
             // SWEEP MODE
             // set <channel:int> <addr:int> <start_point:double>
@@ -809,6 +810,7 @@ void loop() {
                 }
             }
 
+            printf("ok\n");
         } else {
             printf(
                 "Invalid Command - \'mode\' must be defined before "
