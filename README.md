@@ -54,6 +54,9 @@ Turns on extra debug messages printed over serial. `state` should be `on` or `of
 * `setphase <channel:int> <phase_offset:float>`:  
 
 
+* `setamp <channel:int> <amplituce_scale_factor:float>`:  
+
+
 * `mode <type:int> <triggers:int>`:  
 Configures what mode the DDS-Sweeper is operating in
   - 0: single tone
