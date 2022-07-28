@@ -531,7 +531,9 @@ void background() {
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
             if (i == 0 && timing) {
-                multicore_fifo_push_timeout_us(num_ins, 1);
+                // multicore_fifo_push_timeout_us(num_ins, 1);
+                dma_channel_transfer_from_buffer_now(timer_dma, instructions + TIMING_OFFSET,
+                                                     num_ins);
             }
 
             offset = step * ++i;
@@ -829,17 +831,6 @@ void loop() {
             multicore_fifo_push_blocking(0);
 
             if (timing) {
-                // if pico is timing itself, use dma to send all the wait
-                // lengths to the timer pio program
-                dma_channel_config c = dma_channel_get_default_config(timer_dma);
-                channel_config_set_dreq(&c, DREQ_PIO1_TX0);
-                channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-
-                // make sure the first insturction has been sent
-                int num_ins = multicore_fifo_pop_blocking();
-
-                dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0],
-                                      instructions + TIMING_OFFSET, num_ins, true);
             }
 
             printf("ok\n");
@@ -887,6 +878,13 @@ int main() {
 
     // setup dma
     timer_dma = dma_claim_unused_channel(true);
+
+    // if pico is timing itself, use dma to send all the wait
+    // lengths to the timer pio program
+    dma_channel_config c = dma_channel_get_default_config(timer_dma);
+    channel_config_set_dreq(&c, DREQ_PIO1_TX0);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0], instructions + TIMING_OFFSET, 0, false);
 
     // put chip in a known state
     ad9959.ref_clk = 125 * MHZ;
