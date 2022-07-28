@@ -221,7 +221,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
         if (channel == 5)
-            // repeate instrcution
+            // repeat instrcution
             instructions[offset] = 0xff;
         else
             // end instruction
@@ -483,7 +483,24 @@ void background() {
 
         int i = 0;
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-        uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
+        uint step = INS_SIZE * ad9959.channels + csrs * 2 + 1;
+        uint offset = 0;
+
+        // count instructions to run
+        int num_ins = 0;
+        bool repeat = false;
+        while (true) {
+            // If an instruction is empty that means to stop
+            if (instructions[offset] == 0x00) {
+                if (instructions[offset + 1]) {
+                    repeat = true;
+                }
+                break;
+            }
+            offset = step * ++i;
+        }
+        num_ins = i;
+        offset = i = 0;
 
         // set the initial channel select bits
         uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
@@ -496,13 +513,12 @@ void background() {
         triggers = 0;
 
         while (status != ABORTING) {
-            // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) {
-                if (instructions[offset + 1]) {
+            if (i == num_ins) {
+                if (repeat) {
                     i = 0;
-                    offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
-                } else
+                } else {
                     break;
+                }
             }
 
             if (ad9959.channels > 1) {
@@ -514,11 +530,11 @@ void background() {
 
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
-            if (i == 1 && timing) {
-                multicore_fifo_push_blocking(1);
+            if (i == 0 && timing) {
+                multicore_fifo_push_blocking(num_ins);
             }
 
-            offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * (i++);
+            offset = step * ++i;
 
             wait(0);
         }
@@ -818,10 +834,10 @@ void loop() {
                 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
 
                 // make sure the first insturction has been sent
-                multicore_fifo_pop_blocking();
+                int num_ins = multicore_fifo_pop_blocking();
 
                 dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0],
-                                      instructions + TIMING_OFFSET, TIMERS, true);
+                                      instructions + TIMING_OFFSET, num_ins, true);
             }
 
             printf("ok\n");
