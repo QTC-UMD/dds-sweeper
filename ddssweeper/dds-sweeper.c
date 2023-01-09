@@ -368,7 +368,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 lower = eword;
                 higher = sword;
 
-                ins[7] = 0x01;
                 memcpy(ins + 9, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 14, (uint8_t *)&rword, 4);
                 memcpy(ins + 24, "\x80\x43\x00", 3);
@@ -388,6 +387,10 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             ins[11] = 0x09;
             ins[16] = 0x0a;
             ins[21] = 0x03;
+            printf("ins: \n");
+            for (int j = 0; j < 25; j++) {
+                printf("% 2d: %02x\n", j, ins[j]);
+            }
 
             // convert from degrees to tuning words
             s0 = round(s0 / 360.0 * 16384.0);
@@ -404,20 +407,19 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             if (s0 <= e0) {
                 // sweep up
+                ins[4] = 0x01;
                 lower = (uint32_t)s0;
                 higher = (uint32_t)e0;
 
-                ins[6] = 0x01;
                 memcpy(ins + 7, (uint8_t *)&pow, 4);
                 memcpy(ins + 12, "\x00\x00\x00\x00", 4);
                 memcpy(ins + 22, "\xc0\x43\x10", 3);
             } else {
                 // sweep down
-                ins[7] = 0x01;
+                ins[5] = 0x01;
                 lower = (uint32_t)e0;
                 higher = (uint32_t)s0;
 
-                ins[7] = 0x01;
                 memcpy(ins + 7, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 12, (uint8_t *)&pow, 4);
                 memcpy(ins + 22, "\xc0\x43\x00", 3);
@@ -428,6 +430,11 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             memcpy(ins + 1, (uint8_t *)&lower, 2);
             memcpy(ins + 17, (uint8_t *)&higher, 4);
+
+            printf("============== ins: \n");
+            for (int j = 0; j < 25; j++) {
+                printf("% 2d: %02x\n", j, ins[j]);
+            }
         }
 
         // setting profile pin trigger bits
@@ -845,7 +852,7 @@ int main() {
     set_sys_clock_khz(125 * MHZ / 1000, false);
     clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
-    // attatch spi to system clock
+    // attatch spi to system clock so it runs at max rate
     clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
 
@@ -856,7 +863,6 @@ int main() {
 
     // init SPI
     spi_init(spi1, 100 * MHZ);
-    // AD9959 seems to have support for all SPI modes
     spi_set_format(spi1, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
