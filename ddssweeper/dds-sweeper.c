@@ -387,10 +387,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             ins[11] = 0x09;
             ins[16] = 0x0a;
             ins[21] = 0x03;
-            printf("ins: \n");
-            for (int j = 0; j < 25; j++) {
-                printf("% 2d: %02x\n", j, ins[j]);
-            }
 
             // convert from degrees to tuning words
             s0 = round(s0 / 360.0 * 16384.0);
@@ -430,11 +426,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             memcpy(ins + 1, (uint8_t *)&lower, 2);
             memcpy(ins + 17, (uint8_t *)&higher, 4);
-
-            printf("============== ins: \n");
-            for (int j = 0; j < 25; j++) {
-                printf("% 2d: %02x\n", j, ins[j]);
-            }
         }
 
         // setting profile pin trigger bits
@@ -456,9 +447,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
     // write the CSR commands to select the correct channel
     if (ad9959.channels > 1) {
-        // for some reason when I wrote this I decided it was easier to write
-        // the CSR for the next instruction at the end of this one, instead of
-        // writing the CSR for this instruction at the beginning of it
+        // each instruction ends by setting the csr so that it will be ready for
+        // the next instruction
 
         // it may make the table more likely to survive an early trigger, since
         // an early trigger at the end of an instruction would just interrupt
