@@ -395,6 +395,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             // validate params
             if (pow > 16384 - 1) pow = 16384 - 1;
+            if (pow < 1) pow = 1;
             if (s0 > 16384 - 1) s0 = 16384 - 1;
             if (e0 > 16384 - 1) e0 = 16384 - 1;
 
@@ -478,14 +479,14 @@ void background() {
 
         set_status(RUNNING);
 
-        int i = 0;
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         uint step = INS_SIZE * ad9959.channels + csrs * 2 + 1;
         uint offset = 0;
 
         // count instructions to run
-        int num_ins = 0;
         bool repeat = false;
+        int num_ins = 0;
+        int i = 0;
         while (true) {
             // If an instruction is empty that means to stop
             if (instructions[offset] == 0x00) {
@@ -536,6 +537,8 @@ void background() {
             offset = step * ++i;
 
             wait(0);
+            // pio_sm_get_blocking(PIO_TRIG, 0);
+            // triggers++;
         }
         dma_channel_abort(timer_dma);
         pio_sm_clear_fifos(PIO_TRIG, 0);
