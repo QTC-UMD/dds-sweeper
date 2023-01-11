@@ -1,27 +1,46 @@
 # dds-sweeper
 Raspberry Pi Pico interface for the AD9959 DDS
 
-    
+A similar Project:
+https://github.com/Iherrbenza/AD9959_Python
+
+## Testing
+
+| Type            | Min Time Between Instructions                                                            | Notes |
+|-----------------|------------------------------------------------------------------------------------------|-------|
+| Frequency       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
+| Phase           | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
+| Amplitude       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s | Downward seeps are quite broken      |
+| Single Stepping | # of channels in use<br>1: 12 &#956;s<br>2: 14 &#956;s<br>3: 17 &#956;s<br>4: 17 &#956;s |       |
+
+* All the minimum timings are tied to the clock speed of the Pico. The ones listed are for the default 125 MHz clock speed.
+A slower base clock will require longer times between steps
+
+
+### Edge Cases
+- The bahvior after one run has finished but before the first trigger signal of the next is not well defined. Profile pins are
+only updated on trigger pulses. This means if say you ended one run with the profile pins high. Then you go to start another run
+which starts with a upwards sweep, a sweep could run right away. Once the first trigger pulse is recieved though the sweep will
+run again and the run will continue as expected. (I noticed this behavior with amplitude sweeps, I am not sure yet if it applies
+to other types of sweeps.)
+- Output Amplitude is dependent on frequency
+
 
 ## Notes
-The frequency resolution of the AD9959 is 
+- The frequency resolution of the AD9959 is 
 $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\approx 0.1164$ Hz. Any frequency input to the dds-sweeper will be rounded to an integer multiple of the frequency resolution.
 
-The first sweep is delayed for some reason, but then after that they are quite fast, so the first delay needs to be a tad bit longer.
+- The first sweep is delayed for some reason, but then after that they are quite fast, so the first delay needs to be a tad bit 
 
-There seems to be a timing uncertainty of $\approx100-200$ ns between when a trigger signal is received and when the next sweep actually starts for amplitudes.
+- There seems to be a timing uncertainty of $\approx100-200$ ns between when a trigger signal is received and when the next sweep actually starts for amplitudes. Most of this comes from an unspecified delay petween a profile pin going high and the output changing.
 
-If multiple instruciton tables are run without shutting off the device, the ending state of the previous table will presist until the first instruction of the next table is triggered.
+- If multiple instruciton tables are run without shutting off the device, the ending state of the previous table will presist until the first instruction of the next table is triggered.
 
-If a sweep has not concluded before the next sweep is triggered, the behavior is not defined. From obersvation, it seems that this causes problems for downward sweeps, but more thorough testing would be required.
+- If a sweep has not concluded before the next sweep is triggered, the behavior is not defined. From obersvation, it seems that this causes problems for downward sweeps, but more thorough testing would be required.
 
-When you start a table, you are locked into the parameters that are not being swept.
+- When you start a table, you are locked into the parameters that are not being swept.
 
-For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of operation.
-
-The sweeper cannot doing anything while waiting for the initial start
-
-https://github.com/Iherrbenza/AD9959_Python
+- For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of operation.
 
 ## Serial API
 Note: Commands must be terminated with `\n`.
@@ -81,8 +100,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
       - Frequency Sweep (mode 2)  
         `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the frequency resolution.
       - Phase Sweep (mode 3)
-        `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but no matter not they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
-
+        `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but no matter what they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
   
 
 
