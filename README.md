@@ -4,29 +4,28 @@ Raspberry Pi Pico interface for the AD9959 DDS
 A similar Project:
 https://github.com/Iherrbenza/AD9959_Python
 
-## Testing
+## Specs
 
 | Type            | Min Time Between Instructions                                                            | Notes |
 |-----------------|------------------------------------------------------------------------------------------|-------|
 | Frequency       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
 | Phase           | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
-| Amplitude       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s | Downward seeps are quite broken      |
+| Amplitude       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s | Downward sweeps do not behave well. You cannot have a falling sweep which covers a distance greater than the previous rising sweep.      |
 | Single Stepping | # of channels in use<br>1: 12 &#956;s<br>2: 14 &#956;s<br>3: 17 &#956;s<br>4: 17 &#956;s |       |
 
 * All the minimum timings are tied to the clock speed of the Pico. The ones listed are for the default 125 MHz clock speed.
 A slower base clock will require longer times between steps
 
 
-### Edge Cases
+## Notes
 - The bahvior after one run has finished but before the first trigger signal of the next is not well defined. Profile pins are
 only updated on trigger pulses. This means if say you ended one run with the profile pins high. Then you go to start another run
 which starts with a upwards sweep, a sweep could run right away. Once the first trigger pulse is recieved though the sweep will
 run again and the run will continue as expected. (I noticed this behavior with amplitude sweeps, I am not sure yet if it applies
 to other types of sweeps.)
+
 - Output Amplitude is dependent on frequency
 
-
-## Notes
 - The frequency resolution of the AD9959 is 
 $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\approx 0.1164$ Hz. Any frequency input to the dds-sweeper will be rounded to an integer multiple of the frequency resolution.
 
@@ -41,6 +40,10 @@ $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the freq
 - When you start a table, you are locked into the parameters that are not being swept.
 
 - For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of operation.
+
+- Setting up a sweep:  
+![chart alt text](sweeping-chart.png)  
+You need to define a rising/falling delta word (RDW/FDW) as well as as a ramp rate (RSRR/FSRR). The delta words define the change in frequency/amplitude/phase that is applied on each sweep step. For frequency this is Hz, phase is degrees, and amplitude is percentage points (as in percent of maximum output voltage). The ramp rate is how often that delta word is applied. A ramp rate of 1 means the delta word is applied every clock cycle, and since the maximum clock speed of the AD9959 is 125 MHz, this gives a minimum time step of 8 ns. The max value of the ramp rate is 256, which at 125 MHz corresponds to a time interval of 2.048 &#956;s. 
 
 ## Serial API
 Note: Commands must be terminated with `\n`.
