@@ -185,16 +185,6 @@ void abort_run() {
 // ================================================================================================
 
 void set_time(uint32_t addr, uint32_t time) {
-    // printf("time : %u\n", time);
-    // if (time < 10) {
-    //     if (DEBUG) {
-    //         printf(
-    //             "Too Few Clock Cycles - the pico must wait at least 10 clock cycles between "
-    //             "instructions when in internal trigger mode.\n");
-    //     }
-    //     return;
-    // }
-
     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = time - 10;
 }
 
@@ -457,12 +447,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
         uint8_t csr[] = {0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
         memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
     }
-
-    // printf("Instruction #%d - offset %u - channel_offset %d: ", addr, offset, channel_offset);
-    // for (int i = 0; i < INS_SIZE; i++) {
-    //     printf("%02x ", ins[i]);
-    // }
-    // printf("\n");
 }
 
 // ================================================================================================
@@ -470,15 +454,16 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 // ================================================================================================
 
 void background() {
-    // let other core know we ready
+    // let other core know ready
     multicore_fifo_push_blocking(0);
 
     while (true) {
-        // wait for the bat-signal
+        // wait for a start command
         multicore_fifo_pop_blocking();
 
         set_status(RUNNING);
 
+        // pre-calculate spacing vars
         uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
         uint step = INS_SIZE * ad9959.channels + csrs * 2 + 1;
         uint offset = 0;
@@ -497,20 +482,17 @@ void background() {
             }
             offset = step * ++i;
         }
+        
         num_ins = i;
         offset = i = 0;
+        triggers = 0;
 
         // set the initial channel select bits
         uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
         spi_write_blocking(spi1, csr, 2);
 
-        // work aorund fake trigger
-        pio_sm_put(PIO_TRIG, 0, 0x0f);
-        pio_sm_put(PIO_TIME, 0, 10);
-        wait(0);
-        triggers = 0;
-
         while (status != ABORTING) {
+            // check if last instruction
             if (i == num_ins) {
                 if (repeat) {
                     i = offset = 0;
@@ -519,17 +501,14 @@ void background() {
                 }
             }
 
-            if (ad9959.channels > 1) {
-                spi_write_blocking(spi1, instructions + offset + 1,
-                                   (INS_SIZE + 2) * ad9959.channels);
-            } else {
-                spi_write_blocking(spi1, instructions + offset + 1, INS_SIZE);
-            }
+            // send new instruciton to AD9959
+            spi_write_blocking(spi1, instructions + offset + 1, step - 1);
 
+            // prime PIO
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
+            // if on the first instruction, begin the timer
             if (i == 0 && timing) {
-                // multicore_fifo_push_timeout_us(num_ins, 1);
                 dma_channel_transfer_from_buffer_now(timer_dma, instructions + TIMING_OFFSET,
                                                      num_ins);
             }
@@ -537,8 +516,6 @@ void background() {
             offset = step * ++i;
 
             wait(0);
-            // pio_sm_get_blocking(PIO_TRIG, 0);
-            // triggers++;
         }
         dma_channel_abort(timer_dma);
         pio_sm_clear_fifos(PIO_TRIG, 0);
@@ -841,25 +818,22 @@ void loop() {
 }
 
 int main() {
-    // set sysclock to default 125 MHz and output it
     set_sys_clock_khz(125 * MHZ / 1000, false);
+
+    // output sys clock on a gpio pin to be used as REF_CLK for AD9959 
     clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
     // attatch spi to system clock so it runs at max rate
     clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
 
-    // turn on LED
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    gpio_put(PICO_DEFAULT_LED_PIN, 1);
-
     // init SPI
-    spi_init(spi1, 100 * MHZ);
+    spi_init(spi1, 125 * MHZ);
     spi_set_format(spi1, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+
 
     // launch other core
     multicore_launch_core1(background);
@@ -878,26 +852,24 @@ int main() {
     // setup dma
     timer_dma = dma_claim_unused_channel(true);
 
-    // if pico is timing itself, use dma to send all the wait
+    // if pico is timing itself, it will use dma to send all the wait
     // lengths to the timer pio program
     dma_channel_config c = dma_channel_get_default_config(timer_dma);
     channel_config_set_dreq(&c, DREQ_PIO1_TX0);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0], instructions + TIMING_OFFSET, 0, false);
 
-    // put chip in a known state
+    // put AD9959 in a known state
     ad9959.ref_clk = 125 * MHZ;
     init_pin(PIN_RESET);
     reset();
 
-    // second init is a workaround for the first char getting corrupted
-    stdio_init_all();
-    stdio_init_all();
 
-    // zeroing out the table is not necessary, but could help debugging tables
+    // for debugging purposes, this will clear the stored instrucitons on a reset
+    // even if this is removed it should not be defined if the memory presists through power cycle
     memset(instructions, 0, MAX_SIZE);
 
-    // for debugging over uart only
+    stdio_init_all();
     printf("\n==================================\n");
 
     while (true) {
