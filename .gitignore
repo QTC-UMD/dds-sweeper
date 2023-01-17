@@ -2,3 +2,5 @@
 build/*
 
 .vscode/
+
+dds-sweeper-board/dds-sweeper-board-backups/*
