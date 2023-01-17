@@ -42,10 +42,10 @@
 #define PIN_RESET 10
 #define PIN_CLOCK 21
 #define PIN_UPDATE 22
-#define P0 16
-#define P1 17
-#define P2 18
-#define P3 19
+#define P0 19
+#define P1 18
+#define P2 17
+#define P3 16
 #define TRIGGER 8
 
 #define PIO_TRIG pio0
@@ -82,7 +82,7 @@ uint triggers;
 
 uint timer_dma;
 
-uint INS_SIZE = 0;
+volatile uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
 
 // ================================================================================================
@@ -293,7 +293,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
                 memcpy(ins + 8, (uint8_t *)&asf, 4);
                 memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
-                memcpy(ins + 23, "\x40\x43\x10", 3);
             } else {
                 // SWEEP DOWN
                 lower = (uint32_t)e0;
@@ -302,7 +301,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 ins[5] = div;
                 ins[6] = 0x01;
 
-                memcpy(ins + 23, "\x40\x43\x00", 3);
                 memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
                 memcpy(ins + 13, (uint8_t *)&asf, 4);
             }
@@ -313,6 +311,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             memcpy(ins + 1, (uint8_t *)&lower, 3);
             memcpy(ins + 18, (uint8_t *)&higher, 4);
+            memcpy(ins + 23, "\x40\x43\x10", 3);
 
         } else if (type == 2) {
             // FREQ Sweep
@@ -351,7 +350,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 ins[6] = 0x01;
                 memcpy(ins + 9, (uint8_t *)&rword, 4);
                 memcpy(ins + 14, "\x00\x00\x00\x00", 4);
-                memcpy(ins + 24, "\x80\x43\x10", 3);
             } else {
                 // sweep down
                 ins[7] = 0x01;
@@ -360,9 +358,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
                 memcpy(ins + 9, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 14, (uint8_t *)&rword, 4);
-                memcpy(ins + 24, "\x80\x43\x00", 3);
             }
 
+            memcpy(ins + 24, "\x80\x43\x10", 3);
             memcpy(ins + 1, (uint8_t *)&lower, 4);
             memcpy(ins + 19, (uint8_t *)&higher, 4);
         } else if (type == 3) {
@@ -400,7 +398,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
                 memcpy(ins + 7, (uint8_t *)&pow, 4);
                 memcpy(ins + 12, "\x00\x00\x00\x00", 4);
-                memcpy(ins + 22, "\xc0\x43\x10", 3);
             } else {
                 // sweep down
                 ins[5] = 0x01;
@@ -409,7 +406,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
                 memcpy(ins + 7, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 12, (uint8_t *)&pow, 4);
-                memcpy(ins + 22, "\xc0\x43\x00", 3);
             }
 
             lower = ((lower & 0xff) << 8) | ((lower & 0xff00) >> 8);
@@ -417,6 +413,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             memcpy(ins + 1, (uint8_t *)&lower, 2);
             memcpy(ins + 17, (uint8_t *)&higher, 4);
+            memcpy(ins + 22, "\xc0\x43\x10", 3);
         }
 
         // setting profile pin trigger bits
@@ -435,6 +432,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
     // write the instruction to main memory
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
+
+    printf("\n\nins: \n%02X ", instructions[offset - 1]);
+    for (int i = 0; i < INS_SIZE; i++) {
+        printf("%02X ", ins[i]);
+    }
+    printf("\n\n");
 
     // write the CSR commands to select the correct channel
     if (ad9959.channels > 1) {
@@ -482,10 +485,12 @@ void background() {
             }
             offset = step * ++i;
         }
-        
+
         num_ins = i;
         offset = i = 0;
         triggers = 0;
+
+        // printf("ins-size: %d -- %d %d %d\n", INS_SIZE, csrs, step, offset);
 
         // set the initial channel select bits
         uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
@@ -789,7 +794,7 @@ void loop() {
                 }
             }
 
-            printf("ok\n");
+            // printf("ok\n");
         } else {
             printf(
                 "Invalid Command - \'mode\' must be defined before "
@@ -820,7 +825,7 @@ void loop() {
 int main() {
     set_sys_clock_khz(125 * MHZ / 1000, false);
 
-    // output sys clock on a gpio pin to be used as REF_CLK for AD9959 
+    // output sys clock on a gpio pin to be used as REF_CLK for AD9959
     clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
     // attatch spi to system clock so it runs at max rate
@@ -828,12 +833,11 @@ int main() {
                     125 * MHZ);
 
     // init SPI
-    spi_init(spi1, 125 * MHZ);
+    spi_init(spi1, 100 * MHZ);
     spi_set_format(spi1, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-
 
     // launch other core
     multicore_launch_core1(background);
@@ -845,7 +849,7 @@ int main() {
 
     // init the PIO
     uint offset = pio_add_program(PIO_TRIG, &trigger_program);
-    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, 9, P0, PIN_UPDATE);
+    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, 9, P3, PIN_UPDATE);
     offset = pio_add_program(PIO_TIME, &timer_program);
     timer_program_init(PIO_TIME, 0, offset, TRIGGER);
 
@@ -864,11 +868,11 @@ int main() {
     init_pin(PIN_RESET);
     reset();
 
-
     // for debugging purposes, this will clear the stored instrucitons on a reset
     // even if this is removed it should not be defined if the memory presists through power cycle
     memset(instructions, 0, MAX_SIZE);
 
+    stdio_init_all();
     stdio_init_all();
     printf("\n==================================\n");
 
