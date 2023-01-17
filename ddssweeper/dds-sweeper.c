@@ -464,9 +464,11 @@ void background() {
     // let other core know ready
     multicore_fifo_push_blocking(0);
 
+
+    int hwstart = 0;
     while (true) {
         // wait for a start command
-        multicore_fifo_pop_blocking();
+        hwstart = multicore_fifo_pop_blocking();
 
         set_status(RUNNING);
 
@@ -494,12 +496,17 @@ void background() {
         offset = i = 0;
         triggers = 0;
 
-        // printf("ins-size: %d -- %d %d %d\n", INS_SIZE, csrs, step, offset);
 
         // set the initial channel select bits
         uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
         spi_write_blocking(spi1, csr, 2);
 
+        // setup a single wait if in hwstart mode
+        if (hwstart) {
+            pio_sm_put(PIO_TRIG, 0, 0x100);
+            wait(0);
+        }
+    
         while (status != ABORTING) {
             // check if last instruction
             if (i == num_ins) {
@@ -814,10 +821,19 @@ void loop() {
 
             // start the other core
             multicore_fifo_push_blocking(0);
+            OK();
+        }
+    } else if (strncmp(readstring, "hwstart", 7) == 0) {
+        if (ad9959.sweep_type == -1) {
+            printf(
+                "Invalid Command - \'mode\' must be defined before "
+                "a table can be started\n");
+        } else {
+            pio_sm_clear_fifos(PIO_TRIG, 0);
+            pio_sm_clear_fifos(PIO_TIME, 0);
 
-            if (timing) {
-            }
-
+            // start the other core
+            multicore_fifo_push_blocking(1);
             OK();
         }
     } else {
