@@ -38,7 +38,7 @@ $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the freq
 - For the VCO frequency range of 160 MHz to 255 MHz, there is no guarantee of operation. (From the AD9959 datasheet, refers to the frequency of the refernece clock.)
 
 - Setting up a sweep:  
-![chart alt text](sweeping-chart.png)  
+![chart alt text](img/sweeping-chart.png)  
 You need to define a rising/falling delta word (RDW/FDW) as well as as a ramp rate (RSRR/FSRR). The delta words define the change in frequency/amplitude/phase that is applied on each sweep step. For frequency this is Hz, phase is degrees, and amplitude is percentage points (as in percent of maximum output voltage). The ramp rate is how often that delta word is applied. A ramp rate of 1 means the delta word is applied every clock cycle, and since the maximum clock speed of the AD9959 is 125 MHz, this gives a minimum time step of 8 ns. The max value of the ramp rate is 256, which at 125 MHz corresponds to a time interval of 2.048 &#956;s. 
 
 ## Serial API
