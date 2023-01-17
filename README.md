@@ -10,7 +10,7 @@ https://github.com/Iherrbenza/AD9959_Python
 |-----------------|------------------------------------------------------------------------------------------|-------|
 | Frequency       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
 | Phase           | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
-| Amplitude       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s | Downward sweeps do not behave well. You cannot have a falling sweep which covers a distance greater than the previous rising sweep.      |
+| Amplitude       | # of channels in use<br>1: 16 &#956;s<br>2: 20 &#956;s<br>3: 24 &#956;s<br>4: 28 &#956;s |       |
 | Single Stepping | # of channels in use<br>1: 12 &#956;s<br>2: 14 &#956;s<br>3: 17 &#956;s<br>4: 17 &#956;s |       |
 
 * All the minimum timings are tied to the clock speed of the Pico. The ones listed are for the default 125 MHz clock speed.
@@ -124,10 +124,14 @@ Sets how many channels being used by the table mode. Uses the lowest channels fi
 
 
 * `save`:  
-Saves the current table to nonvolatile memory so that it can be recovered later. 
+Saves the current table to nonvolatile memory so that it can be recovered later (after a power cycle). 
 
 
 * `load`:  
 Retrieves the table currently stored in flash and restores it to RAM so that it can be used again. A saved table must be loaded before it can be used.
+
+
+
+## Examples
 
 
