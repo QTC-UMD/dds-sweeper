@@ -70,12 +70,15 @@ int status = STOPPED;
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
+// For responding OK to successful commands
+#define OK() printf("ok\n")
+
 // ================================================================================================
 // global variables
 // ================================================================================================
 ad9959_config ad9959;
 char readstring[256];
-bool DEBUG = true;
+bool DEBUG = false;
 bool timing = false;
 
 uint triggers;
@@ -433,11 +436,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
     // write the instruction to main memory
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
 
-    printf("\n\nins: \n%02X ", instructions[offset - 1]);
-    for (int i = 0; i < INS_SIZE; i++) {
-        printf("%02X ", ins[i]);
-    }
-    printf("\n\n");
+    // // instruction printing for debugging
+    // printf("\n\nins: \n%02X ", instructions[offset - 1]);
+    // for (int i = 0; i < INS_SIZE; i++) {
+    //     printf("%02X ", ins[i]);
+    // }
+    // printf("\n\n");
 
     // write the CSR commands to select the correct channel
     if (ad9959.channels > 1) {
@@ -541,23 +545,22 @@ void loop() {
         printf("%d\n", local_status);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
         DEBUG = 1;
-        printf("ok\n");
+        OK();
     } else if (strncmp(readstring, "debug off", 9) == 0) {
         DEBUG = 0;
-        printf("ok\n");
+        OK();
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
-        printf("ok\n");
     } else if (strncmp(readstring, "numtriggers", 11) == 0) {
         printf("%u\n", triggers);
     } else if (strncmp(readstring, "reset", 5) == 0) {
         abort_run();
         reset();
         set_status(STOPPED);
-        printf("ok\n");
+        OK();
     } else if (strncmp(readstring, "abort", 5) == 0) {
         abort_run();
-        printf("ok\n");
+        OK();
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
@@ -570,13 +573,13 @@ void loop() {
             readstring, STOPPED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         read_all();
-        printf("ok\n");
+        OK();
     } else if (strncmp(readstring, "load", 4) == 0) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overread"
         memcpy(instructions, ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET)), MAX_SIZE);
 #pragma GCC diagnostic pop
-        printf("ok\n");
+        OK();
     } else if (strncmp(readstring, "save", 4) == 0) {
         uint32_t ints = save_and_disable_interrupts();
         printf("Erasing...\n");
@@ -584,7 +587,7 @@ void loop() {
         printf("Programming...\n");
         flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
         restore_interrupts(ints);
-        printf("ok\n");
+        OK();
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
 
@@ -596,7 +599,7 @@ void loop() {
             printf("Invalid Channels - expected: num must be in range 0-3\n");
         } else {
             ad9959.channels = channels;
-            printf("ok\n");
+            OK();
         }
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
         // setfreq <channel:int> <frequency:float>
@@ -619,7 +622,7 @@ void loop() {
                 printf("Freq: %12lf\n", f);
             }
 
-            printf("ok\n");
+            OK();
         }
     } else if (strncmp(readstring, "setphase", 8) == 0) {
         // setphase <channel:int> <phase:float>
@@ -641,7 +644,7 @@ void loop() {
                 printf("Phase: %12lf\n", resp);
             }
 
-            printf("ok\n");
+            OK();
         }
     } else if (strncmp(readstring, "setamp", 6) == 0) {
         // setamp <channel:int> <amp:float>
@@ -663,7 +666,7 @@ void loop() {
                 printf("Amp: %12lf\n", resp);
             }
 
-            printf("ok\n");
+            OK();
         }
     } else if (strncmp(readstring, "setmult", 7) == 0) {
         uint mult;
@@ -682,7 +685,7 @@ void loop() {
             spi_write_blocking(spi1, fr1, 4);
             update();
 
-            printf("ok\n");
+            OK();
         }
     } else if (strncmp(readstring, "setclock", 8) == 0) {
         uint src;   // 0 = internal, 1 = external
@@ -706,7 +709,7 @@ void loop() {
                                         125 * MHZ);
                         clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
                         stdio_init_all();
-                        printf("ok\n");
+                        OK();
                         // clock_status = INTERNAL;
                     } else {
                         printf(
@@ -718,7 +721,7 @@ void loop() {
                     ad9959.sys_clk = freq * ad9959.pll_mult;
                     gpio_deinit(PIN_CLOCK);
                     if (DEBUG) printf("AD9959 requires external reference clock\n");
-                    printf("ok\n");
+                    OK();
                 }
             }
         }
@@ -737,7 +740,7 @@ void loop() {
             INS_SIZE = sizes[type];
             ad9959.sweep_type = type;
             timing = _timing;
-            printf("ok\n");
+            OK();
         }
     } else if (strncmp(readstring, "set ", 4) == 0) {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
@@ -767,7 +770,7 @@ void loop() {
                 }
             }
 
-            printf("ok\n");
+            OK();
         } else if (ad9959.sweep_type <= 3) {
             // SWEEP MODE
             // set <channel:int> <addr:int> <start_point:double>
@@ -794,7 +797,7 @@ void loop() {
                 }
             }
 
-            // printf("ok\n");
+            OK();
         } else {
             printf(
                 "Invalid Command - \'mode\' must be defined before "
@@ -815,7 +818,7 @@ void loop() {
             if (timing) {
             }
 
-            printf("ok\n");
+            OK();
         }
     } else {
         printf("Unrecognized Command: \"%s\"\n", readstring);
