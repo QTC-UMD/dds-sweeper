@@ -3,4 +3,5 @@ build/*
 
 .vscode/
 
-dds-sweeper-board/dds-sweeper-board-backups/*
+dds-sweeper-board/*
+!dds-sweeper-board/gerbers/*
