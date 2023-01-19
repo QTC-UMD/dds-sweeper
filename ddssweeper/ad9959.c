@@ -13,15 +13,13 @@ void ad9959_default_config() {
     uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
     uint8_t pow[] = {0x05, 0x00, 0x00};
     uint8_t acr[] = {0x06, 0x00, 0x00, 0x00};
-    for (int i = 0; i < 4; i++) {
-        // select the channel
-        uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x2};
-        spi_write_blocking(spi1, csr, 2);
-        spi_write_blocking(spi1, cfr, 4);
-        spi_write_blocking(spi1, ftw, 5);
-        spi_write_blocking(spi1, pow, 3);
-        spi_write_blocking(spi1, acr, 4);
-    }
+
+    uint8_t csr[] = {0x00, 0xf2};
+    spi_write_blocking(spi1, csr, 2);
+    spi_write_blocking(spi1, cfr, 4);
+    spi_write_blocking(spi1, ftw, 5);
+    spi_write_blocking(spi1, pow, 3);
+    spi_write_blocking(spi1, acr, 4);
 }
 
 uint32_t send_freq(ad9959_config* c, uint channel, double freq) {
@@ -110,8 +108,7 @@ void read_all() {
         printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
         read_reg(0x04, 4, resp);
-        printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
-               resp[3]);
+        printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
 
         read_reg(0x05, 2, resp);
         printf("CPOW: %02x %02x\n", resp[0], resp[1]);
@@ -123,12 +120,13 @@ void read_all() {
         printf("LSRR: %02x %02x\n", resp[0], resp[1]);
 
         read_reg(0x08, 4, resp);
-        printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
-               resp[3]);
+        printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
 
         read_reg(0x09, 4, resp);
-        printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2],
-               resp[3]);
+        printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+
+        read_reg(0x0a, 4, resp);
+        printf(" CW1: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
     }
     spi_set_baudrate(spi1, 100 * MHZ);
 }

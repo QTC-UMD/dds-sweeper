@@ -39,7 +39,7 @@
 #define PIN_MISO 12
 #define PIN_MOSI 15
 #define PIN_SCK 14
-#define PIN_RESET 10
+#define PIN_SYNC 10
 #define PIN_CLOCK 21
 #define PIN_UPDATE 22
 #define P0 19
@@ -78,14 +78,14 @@ int status = STOPPED;
 // ================================================================================================
 ad9959_config ad9959;
 char readstring[256];
-bool DEBUG = false;
+bool DEBUG = true;
 bool timing = false;
 
 uint triggers;
 
 uint timer_dma;
 
-volatile uint INS_SIZE = 0;
+uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
 
 // ================================================================================================
@@ -153,11 +153,15 @@ void readline() {
 
 void update() { pio_sm_put(PIO_TRIG, 0, UPDATE); }
 
+void sync() {
+    gpio_put(PIN_SYNC, 1);
+    sleep_ms(1);
+    gpio_put(PIN_SYNC, 0);
+    sleep_ms(1);
+}
+
 void reset() {
-    gpio_put(PIN_RESET, 1);
-    sleep_ms(1);
-    gpio_put(PIN_RESET, 0);
-    sleep_ms(1);
+    sync();
 
     ad9959.pll_mult = 4;
     ad9959.sys_clk = ad9959.ref_clk * ad9959.pll_mult;
@@ -457,13 +461,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 }
 
 // ================================================================================================
-// Main Tasks
+// Table Running Loop
 // ================================================================================================
 
 void background() {
     // let other core know ready
     multicore_fifo_push_blocking(0);
-
 
     int hwstart = 0;
     while (true) {
@@ -496,9 +499,15 @@ void background() {
         offset = i = 0;
         triggers = 0;
 
+        // does this matter?
+        // I think we should be able to write to all the registers with the first write
+        // since if single channel that is desired, otherwise the other channels will
+        // just get overwritten
 
         // set the initial channel select bits
-        uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
+        // uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
+        // spi_write_blocking(spi1, csr, 2);
+        uint8_t csr[] = {0x00, 0xf2};
         spi_write_blocking(spi1, csr, 2);
 
         // setup a single wait if in hwstart mode
@@ -506,7 +515,7 @@ void background() {
             pio_sm_put(PIO_TRIG, 0, 0x100);
             wait(0);
         }
-    
+
         while (status != ABORTING) {
             // check if last instruction
             if (i == num_ins) {
@@ -539,6 +548,10 @@ void background() {
         set_status(STOPPED);
     }
 }
+
+// ================================================================================================
+// Serial Communication Loop
+// ================================================================================================
 
 void loop() {
     readline();
@@ -747,6 +760,19 @@ void loop() {
             INS_SIZE = sizes[type];
             ad9959.sweep_type = type;
             timing = _timing;
+
+            if (ad9959.sweep_type == 0) {
+
+                uint8_t cfr[] = {0x03, 0x00, 0x03, 0x04};
+                // uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
+                // uint8_t pow[] = {0x05, 0x00, 0x00};
+                // uint8_t acr[] = {0x06, 0x00, 0x00, 0x00};
+
+                uint8_t csr[] = {0x00, 0xf2};
+                spi_write_blocking(spi1, csr, 2);
+                spi_write_blocking(spi1, cfr, 4);
+            }
+
             OK();
         }
     } else if (strncmp(readstring, "set ", 4) == 0) {
@@ -841,7 +867,15 @@ void loop() {
     }
 }
 
+// ================================================================================================
+// Initial Setup
+// ================================================================================================
+
 int main() {
+    gpio_init(PICO_DEFAULT_LED_PIN);
+    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    gpio_put(PICO_DEFAULT_LED_PIN, 1);
+
     set_sys_clock_khz(125 * MHZ / 1000, false);
 
     // output sys clock on a gpio pin to be used as REF_CLK for AD9959
@@ -853,7 +887,7 @@ int main() {
 
     // init SPI
     spi_init(spi1, 100 * MHZ);
-    spi_set_format(spi1, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+    spi_set_format(spi1, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
@@ -884,16 +918,18 @@ int main() {
 
     // put AD9959 in a known state
     ad9959.ref_clk = 125 * MHZ;
-    init_pin(PIN_RESET);
+    init_pin(PIN_SYNC);
     reset();
 
     // for debugging purposes, this will clear the stored instrucitons on a reset
     // even if this is removed it should not be defined if the memory presists through power cycle
     memset(instructions, 0, MAX_SIZE);
 
+    // for some reason the first byte of communication seems to get corrupted without initializing
+    // twice
     stdio_init_all();
-    stdio_init_all();
-    printf("\n==================================\n");
+    // stdio_init_all();
+    // printf("\n==================================\n");
 
     while (true) {
         loop();
