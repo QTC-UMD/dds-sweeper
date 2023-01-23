@@ -12,8 +12,7 @@
 #   Copyright 2013, Philip Starkey                                    #
 #                                                                     #
 # This file is used to flash a Raspberry Pi Pico microcontroller      #
-# prototyping board to create a DDS-Sweeper (see readme.txt and       #
-# http://hardware.labscriptsuite.org).                                #
+# prototyping board to create a DDS-Sweeper (see readme.txt           #
 # This file is licensed under the Simplified BSD License.             #
 # See the license.txt file for the full license.                      #
 #                                                                     #
@@ -112,8 +111,7 @@ void set_status(int new_status) {
 }
 
 void measure_freqs(void) {
-    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause
-    // License
+    // From https://github.com/raspberrypi/pico-examples under BSD-3-Clause License
     uint f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
     uint f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
     uint f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
@@ -174,7 +172,8 @@ void abort_run() {
     if (get_status() == RUNNING) {
         set_status(ABORTING);
 
-        // use the time pio to hit the trigger
+        // the Trigger PIO has already processed the next instruciton
+        // it needs to be flushed by using the Timer PIO to send a trigger signal
         pio_sm_put(PIO_TIME, 0, 10);
     }
 }
@@ -187,7 +186,7 @@ void set_time(uint32_t addr, uint32_t time) {
     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = time - 10;
 }
 
-void set_ins(uint type, uint channel, uint addr, double s0, double e0, double rate, uint div) {
+void set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
     uint8_t ins[30];
 
     // number of times the CSR register will need be written in this step
@@ -240,7 +239,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
         double freq, amp, phase;
         amp = get_asf(e0, asf);
         freq = get_ftw(&ad9959, s0, ftw);
-        phase = get_pow(rate, pow);
+        phase = get_pow(delta, pow);
 
         // write instruction
         memcpy(ins + 1, (uint8_t *)&ftw, 4);
@@ -300,20 +299,20 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             // calculations: go from percentages to integers between 0 and 1024
             s0 = round(s0 * 1024);
             e0 = round(e0 * 1024);
-            rate = round(rate * 1024);
+            delta = round(delta * 1024);
 
             // ensure inside range
-            if (rate < 0) rate = 0;
+            if (delta < 0) delta = 0;
             if (s0 < 0) s0 = 0;
             if (e0 < 0) e0 = 0;
 
-            if (rate > 1023) rate = 1023;
+            if (delta > 1023) delta = 1023;
             if (s0 > 1023) s0 = 1023;
             if (e0 > 1023) e0 = 1023;
 
             // bit alignment
             uint32_t rate_word;
-            rate_word = ((((uint32_t)rate) & 0x3fc) >> 2) | ((((uint32_t)rate) & 0x3) << 14);
+            rate_word = ((((uint32_t)delta) & 0x3fc) >> 2) | ((((uint32_t)delta) & 0x3) << 14);
 
             uint32_t lower, higher;
             if (s0 <= e0) {
@@ -322,7 +321,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 higher = (uint32_t)e0;
 
                 ins[5] = 0x01;
-                ins[6] = div;
+                ins[6] = rate;
 
                 memcpy(ins + 8, (uint8_t *)&rate_word, 4);
                 memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
@@ -331,7 +330,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 lower = (uint32_t)e0;
                 higher = (uint32_t)s0;
 
-                ins[5] = div;
+                ins[5] = rate;
                 ins[6] = 0x01;
 
                 memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
@@ -351,9 +350,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %12lf%% to %12lf%% with ramp rate %12lf%% and "
-                    "div of %d\n",
-                    addr, channel, s0, e0, rate, div);
+                    "Set ins #%d for channel %d from %12lf%% to %12lf%% with delta %12lf%% and "
+                    "rate of %d\n",
+                    addr, channel, s0, e0, delta, rate);
             }
 
         } else if (type == 2) {
@@ -368,8 +367,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             // ]
             ins[0] = 0x04;
             ins[5] = 0x07;
-            ins[6] = div;
-            ins[7] = div;
+            ins[6] = rate;
+            ins[7] = rate;
             ins[8] = 0x08;
             ins[13] = 0x09;
             ins[18] = 0x0a;
@@ -379,7 +378,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             double start_point, end_point, rampe_rate;
             start_point = get_ftw(&ad9959, s0, s0_word);
             end_point = get_ftw(&ad9959, e0, e0_word);
-            rampe_rate = get_ftw(&ad9959, rate, rate_word);
+            rampe_rate = get_ftw(&ad9959, delta, rate_word);
 
             // write instruction
             uint8_t *lower, *higher;
@@ -409,9 +408,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %12lf Hz to %12lf Hz with ramp rate %12lf Hz "
-                    "and div of %d\n",
-                    addr, channel, start_point, end_point, rampe_rate, div);
+                    "Set ins #%d for channel %d from %12lf Hz to %12lf Hz with delta %12lf Hz and "
+                    "rate of %d\n",
+                    addr, channel, start_point, end_point, rampe_rate, rate);
             }
 
         } else if (type == 3) {
@@ -426,8 +425,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             // ]
             ins[0] = 0x05;
             ins[3] = 0x07;
-            ins[4] = div;
-            ins[5] = div;
+            ins[4] = rate;
+            ins[5] = rate;
             ins[6] = 0x08;
             ins[11] = 0x09;
             ins[16] = 0x0a;
@@ -436,17 +435,17 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             // convert from degrees to tuning words
             s0 = round(s0 / 360.0 * 16384.0);
             e0 = round(e0 / 360.0 * 16384.0);
-            rate = round(rate / 360.0 * 16384.0);
+            delta = round(delta / 360.0 * 16384.0);
 
             // validate params
-            if (rate > 16384 - 1) rate = 16384 - 1;
-            if (rate < 1) rate = 1;
+            if (delta > 16384 - 1) delta = 16384 - 1;
+            if (delta < 1) delta = 1;
             if (s0 > 16384 - 1) s0 = 16384 - 1;
             if (e0 > 16384 - 1) e0 = 16384 - 1;
 
             // bit shifting to flip endianness
             uint32_t rate_word;
-            rate_word = ((((uint32_t)rate) & 0x3fc0) >> 6) | ((((uint32_t)rate) & 0x3f) << 10);
+            rate_word = ((((uint32_t)delta) & 0x3fc0) >> 6) | ((((uint32_t)delta) & 0x3f) << 10);
 
             uint32_t lower, higher;
             if (s0 <= e0) {
@@ -476,10 +475,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %12lf deg to %12lf deg with ramp rate %12lf "
-                    "deg "
-                    "and div of %d\n",
-                    addr, channel, s0, e0, rate, div);
+                    "Set ins #%d for channel %d from %12lf deg to %12lf deg with delta %12lf "
+                    "deg and rate of %d\n",
+                    addr, channel, s0, e0, delta, rate);
             }
         }
     }
@@ -551,6 +549,9 @@ void background() {
         // since if single channel that is desired, otherwise the other channels will
         // just get overwritten
 
+        // sync just to be sure
+        sync();
+
         // set the initial channel select bits
         // uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
         // spi_write_blocking(spi1, csr, 2);
@@ -573,11 +574,11 @@ void background() {
                 }
             }
 
-            // send new instruciton to AD9959
-            spi_write_blocking(spi1, instructions + offset + 1, step - 1);
-
             // prime PIO
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
+
+            // send new instruciton to AD9959
+            spi_write_blocking(spi1, instructions + offset + 1, step - 1);
 
             // if on the first instruction, begin the timer
             if (i == 0 && timing) {
@@ -835,12 +836,18 @@ void loop() {
             int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr, &freq,
                                 &amp, &phase, &time);
 
-            if (!timing && parsed < 5) {
+            if (parsed > 1 && channel > 5) {
+                printf(
+                    "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
+                    "instrcution\n");
+            } else if (channel > 3 && parsed < 2) {
+                printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+            } else if (!timing && parsed < 5 && channel < 4) {
                 printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
                     "<frequency:double> <amplitude:double> <phase:double> "
                     "(<time:int>)\n");
-            } else if (timing && parsed < 6) {
+            } else if (timing && parsed < 6 && channel < 4) {
                 printf(
                     "No Time Given - expected: set <channel:int> <addr:int> "
                     "<frequency:double> <amplitude:double> <phase:double> "
@@ -856,24 +863,30 @@ void loop() {
         } else if (ad9959.sweep_type <= 3) {
             // SWEEP MODE
             // set <channel:int> <addr:int> <start_point:double>
-            // <end_point:double> <rate:double> <div:int> (<time:int>)
-            uint32_t channel, addr, div, time;
+            // <end_point:double> <rate:double> <ramp-rate:int> (<time:int>)
+            uint32_t channel, addr, ramp_rate, time;
             double start, end, rate;
             int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel, &addr, &start,
-                                &end, &rate, &div, &time);
+                                &end, &rate, &ramp_rate, &time);
 
-            if (parsed < 6) {
+            if (parsed > 1 && channel > 5) {
+                printf(
+                    "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
+                    "instrcution\n");
+            } else if (channel > 3 && parsed < 2) {
+                printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+            } else if (parsed < 6 && channel < 4) {
                 printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
-                    "<start_point:double> <end_point:double> <rate:double> "
-                    "(<time:int>)\n");
-            } else if (timing && parsed < 7) {
+                    "<start_point:double> <end_point:double> <delta:double> "
+                    "<rate:int> (<time:int>)\n");
+            } else if (timing && parsed < 7 && channel < 4) {
                 printf(
                     "No Time Given - expected: set <channel:int> <addr:int> "
-                    "<start_point:double> <end_point:double> <rate:double> "
-                    "<time:int>\n");
+                    "<start_point:double> <end_point:double> <delta:double> "
+                    "<rate:int> <time:int>\n");
             } else {
-                set_ins(ad9959.sweep_type, channel, addr, start, end, rate, div);
+                set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate);
                 if (timing) {
                     set_time(addr, time);
                 }
@@ -925,8 +938,8 @@ int main() {
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
-    // for some reason the first byte of communication seems to get corrupted without initializing
-    // twice
+    // for some reason the first byte of communication seems to get corrupted without
+    // initializing twice
     stdio_init_all();
     // stdio_init_all();
     // printf("\n==================================\n");
@@ -978,7 +991,8 @@ int main() {
     reset();
 
     // for debugging purposes, this will clear the stored instrucitons on a reset
-    // even if this is removed it should not be defined if the memory presists through power cycle
+    // even if this is removed it should not be defined if the memory presists through power
+    // cycle
     memset(instructions, 0, MAX_SIZE);
 
     while (true) {
