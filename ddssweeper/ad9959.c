@@ -1,81 +1,66 @@
 #include "ad9959.h"
 
-void ad9959_default_config() {
-    // PLL multiplier of x4
-    uint8_t fr1[] = {0x01, 0x90, 0x00, 0x00};
-    spi_write_blocking(spi1, fr1, 4);
-
-    // nothing in FR2
-    uint8_t fr2[] = {0x02, 0x00, 0x00};
-    spi_write_blocking(spi1, fr2, 3);
-
-    uint8_t cfr[] = {0x03, 0x00, 0x03, 0x04};
-    uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
-    uint8_t pow[] = {0x05, 0x00, 0x00};
-    uint8_t acr[] = {0x06, 0x00, 0x00, 0x00};
-
-    uint8_t csr[] = {0x00, 0xf2};
-    spi_write_blocking(spi1, csr, 2);
-    spi_write_blocking(spi1, cfr, 4);
-    spi_write_blocking(spi1, ftw, 5);
-    spi_write_blocking(spi1, pow, 3);
-    spi_write_blocking(spi1, acr, 4);
-}
-
-uint32_t send_freq(ad9959_config* c, uint channel, double freq) {
-    uint32_t ftw = round(freq * 4294967296.l / c->sys_clk);
-
-    uint8_t buf[5];
-    buf[0] = 0x04;
-
-    uint8_t* bytes = (uint8_t*)&ftw;
-    for (int i = 0; i < 4; i++) {
-        // 1 offset for the register address
-        buf[i + 1] = bytes[3 - i];
-    }
-
-    uint8_t csr[] = {0x00, (1u << (channel + 4)) | 0x02};
-    spi_write_blocking(spi1, csr, 2);
-    spi_write_blocking(spi1, buf, 5);
-
-    // for debugging
-    return ftw;
-}
-
-double send_phase(uint channel, double phase) {
-    uint32_t pow = round(phase / 360.0 * 16384.0);
-
-    if (pow > 16383) pow = 16383;
-
-    uint8_t buf[3];
-    buf[0] = 0x05;
-    buf[1] = (0xff00 & pow) >> 8;
-    buf[2] = 0xff & pow;
-
-    uint8_t csr[] = {0x00, (1u << (channel + 4)) | 0x02};
-    spi_write_blocking(spi1, csr, 2);
-    spi_write_blocking(spi1, buf, 3);
-
-    return pow / 16384.0 * 360.0;
-}
-
-double send_amp(uint channel, double amp) {
+// ================================================================================================
+// calculate tuning words
+// ================================================================================================
+double get_asf(double amp, uint8_t* buf) {
     uint32_t asf = round(amp * 1024);
 
+    // validation
     if (asf > 1023) asf = 1023;
+    if (asf < 1) asf = 1;
 
-    uint8_t buf[4];
-    buf[0] = 0x06;
-    buf[1] = 0x00;
-    buf[2] = ((0x300 & asf) >> 8) | 0x10;
-    buf[3] = 0xff & asf;
-
-    uint8_t csr[] = {0x00, (1u << (channel + 4)) | 0x02};
-    spi_write_blocking(spi1, csr, 2);
-    spi_write_blocking(spi1, buf, 4);
+    buf[0] = 0x00;
+    buf[1] = ((0x300 & asf) >> 8) | 0x10;
+    buf[2] = 0xff & asf;
 
     return asf / 1023.0;
 }
+double get_ftw(ad9959_config* c, double freq, uint8_t* buf) {
+    double sys_clk = c->ref_clk * c->pll_mult;
+    uint32_t ftw = round(freq * 4294967296.l / sys_clk);
+
+    // maybe add some validation here
+
+    // flip order of bits (little endian -> big endian)
+    uint8_t* bytes = (uint8_t*)&ftw;
+    for (int i = 0; i < 4; i++) {
+        buf[i] = bytes[3 - i];
+    }
+
+    // return the frequency that was ablt to be set
+    return ftw * sys_clk / 4294967296.l;
+}
+double get_pow(double phase, uint8_t* buf) {
+    uint32_t pow = round(phase / 360.0 * 16384.0);
+
+    // make sure pow is within range?
+    pow = pow % 16383;
+
+    buf[0] = (0xff00 & pow) >> 8;
+    buf[1] = 0xff & pow;
+
+    return pow / 16383.0 * 360.0;
+}
+
+// ================================================================================================
+// Sending Tuning Words
+// ================================================================================================
+void send_channel(uint8_t reg, uint8_t channel, uint8_t* buf, size_t len) {
+    uint8_t csr[] = {0x00, 0x02 | (1u << (channel + 4))};
+    spi_write_blocking(spi1, csr, 2);
+    spi_write_blocking(spi1, &reg, 1);
+    spi_write_blocking(spi1, buf, len);
+}
+
+void send(uint8_t reg, uint8_t* buf, size_t len) {
+    spi_write_blocking(spi1, &reg, 1);
+    spi_write_blocking(spi1, buf, len);
+}
+
+// ================================================================================================
+// Readback
+// ================================================================================================
 
 void read_reg(uint8_t reg, size_t len, uint8_t* buf) {
     reg |= 0x80;
@@ -129,4 +114,32 @@ void read_all() {
         printf(" CW1: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
     }
     spi_set_baudrate(spi1, 100 * MHZ);
+}
+
+// ================================================================================================
+// Control
+// ================================================================================================
+void set_pll_mult(ad9959_config* c, uint mult) {
+    c->pll_mult = mult;
+
+    uint8_t vco = 0;
+    if (mult * c->ref_clk >= 255 * MHZ) {
+        vco = 0x80;
+    }
+
+    uint8_t fr1[] = {0x01, vco | (mult << 2), 0x00, 0x00};
+    spi_write_blocking(spi1, fr1, 4);
+
+    for (int i = 0; i < 4; i++) {
+        printf("%02x\n", fr1[i]);
+    }
+}
+
+void set_ref_clk(ad9959_config* c, uint64_t freq) { c->ref_clk = freq; }
+
+void single_step_mode() {
+    uint8_t csr = 0xf2;
+    send(0x00, &csr, 1);
+    uint8_t cfr[3] = {0x00, 0x03, 0x04};
+    send(0x03, cfr, 3);
 }

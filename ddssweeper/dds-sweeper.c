@@ -89,7 +89,7 @@ uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
 
 // ================================================================================================
-// Setup
+// Utility Functions
 // ================================================================================================
 
 void init_pin(uint pin) {
@@ -147,10 +147,6 @@ void readline() {
     }
 }
 
-// ================================================================================================
-// Interact with AD9959
-// ================================================================================================
-
 void update() { pio_sm_put(PIO_TRIG, 0, UPDATE); }
 
 void sync() {
@@ -162,14 +158,10 @@ void sync() {
 
 void reset() {
     sync();
-
-    ad9959.pll_mult = 4;
-    ad9959.sys_clk = ad9959.ref_clk * ad9959.pll_mult;
-    ad9959.sweep_type = -1;
+    ad9959.sweep_type = 1;
     ad9959.channels = 1;
 
-    ad9959_default_config();
-
+    single_step_mode();
     update();
 }
 
@@ -227,48 +219,77 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
     }
 
     if (type == 0) {
-        // SINGLE TONE
-        uint32_t ftw, asf, pow;
+        // SINGLE STEP
+
+        // Memory Map (12 bytes)
+        // [ 0x04, FTW3, FTW2, FTW1, FTW0,  *Frequcney Tuning Word
+        //   0x05, POW1, POW0,              *Phase Offset Word
+        //   0x06, ACR2, ACR1, ACR0         *Amplitude Control Register
+        // ]
+
+        ins[0] = 0x04;
+        ins[5] = 0x05;
+        ins[8] = 0x06;
 
         // profile pins do not matter for single tone mode, but the pio program
         // still expects a nonzero value for the profile pin mask
         instructions[offset - 1] |= 0x01;
 
-        // register addresses
-        ins[0] = 0x04;
-        ins[5] = 0x05;
-        ins[8] = 0x06;
-
         // calculate tuning values from real values
-        ftw = round(s0 / ad9959.sys_clk * 4294967296.0);
-        asf = round(e0 * 1023);
-        pow = round(rate / 360.0 * 16384.0);
-
-        // validate parameters
-        if (asf < 1) asf = 1;
-        if (pow > 16384 - 1) pow = 16384 - 1;
-
-        // bit shifts to align to AD9959 register map
-        ftw = ((ftw & 0xff) << 24) | ((ftw & 0xff00) << 8) | ((ftw & 0xff0000) >> 8) |
-              ((ftw & 0xff000000) >> 24);
-        asf = ((asf & 0xff) << 16) | (asf & 0xff00) | 0x1000;
-        pow = ((pow & 0xff) << 8) | ((pow & 0xff00) >> 8);
+        uint8_t asf[3], ftw[4], pow[2];
+        double freq, amp, phase;
+        amp = get_asf(e0, asf);
+        freq = get_ftw(&ad9959, s0, ftw);
+        phase = get_pow(rate, pow);
 
         // write instruction
         memcpy(ins + 1, (uint8_t *)&ftw, 4);
         memcpy(ins + 6, (uint8_t *)&pow, 2);
         memcpy(ins + 9, (uint8_t *)&asf, 3);
 
-        instructions[offset - 1] = 0x69;
+        if (DEBUG) {
+            printf(
+                "Set ins #%d for channel %d with amp: %12lf %% freq: %12lf Hz phase: %12lf deg\n",
+                addr, channel, amp, freq, phase);
+        }
+
     } else {
-        // Not a single tone
-        uint32_t lower, higher;
+        // SWEEPS
+
+        // Profile pins are the same for all sweep types
+        // Profile pins getupdated twice for each trigger
+        // the first update puts the profile pin high no matter what
+        // then only if it is a downward sweep drop the profile pin low
+
+        // The profile pin directions for a single table step are stored in a single byte
+        // The least signifigant 4 bits in the byte corespond to the first value the profile pin
+        // hits during an update. Since the pin should always go high first, that means the least
+        // signifigant nibble should always be 0xf.
+        if (s0 <= e0 && ad9959.channels == 1) {
+            // case: upward sweep single channel mode
+            instructions[offset - 1] |= 0xff;
+        } else if (s0 <= e0) {
+            // case: upward sweep on this channel
+            instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
+        } else if (ad9959.channels == 1) {
+            // case: downward sweep single channel mode
+            instructions[offset - 1] |= 0x0f;
+        } else {
+            // case: downward sweep on this channel
+            instructions[offset - 1] &= ~(1u << (channel + 4));
+            instructions[offset - 1] |= 1u << channel;
+        }
 
         if (type == 1) {
             // AMP sweep
-            uint32_t asf;
-
-            // register addresses
+            // Memory Map
+            // [ 0x06, ACR2, ACR1, ACR0,                *Amplitude Control Register
+            //   0X07,  FRR,  RRR,                      *Linear Sweep Ramp Rate Register
+            //   0x08, RDW3, RDW2, RDW1, RDW1,          *Rising Delta Word Register
+            //   0x09, FDW3, FDW2, FDW1, FDW1,          *Falling Delta Word Register
+            //   0x0a,  CW3,  CW2,  CW1,  CW0,          *Sweep Endpoint,
+            //   0x03, CFR3, CFR2, CFR1, CFR0           *Channel Function Register
+            // ]
             ins[0] = 0x06;
             ins[4] = 0x07;
             ins[7] = 0x08;
@@ -276,20 +297,25 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             ins[17] = 0x0a;
             ins[22] = 0x03;
 
-            // calculations
+            // calculations: go from percentages to integers between 0 and 1024
             s0 = round(s0 * 1024);
             e0 = round(e0 * 1024);
-            asf = round(rate * 1024);
+            rate = round(rate * 1024);
 
-            // validation
-            if (asf < 1) asf = 1;
-            if (asf > 1023) asf = 1023;
+            // ensure inside range
+            if (rate < 0) rate = 0;
+            if (s0 < 0) s0 = 0;
+            if (e0 < 0) e0 = 0;
+
+            if (rate > 1023) rate = 1023;
             if (s0 > 1023) s0 = 1023;
             if (e0 > 1023) e0 = 1023;
 
             // bit alignment
-            asf = ((asf & 0x3fc) >> 2) | ((asf & 0x3) << 14);
+            uint32_t rate_word;
+            rate_word = ((((uint32_t)rate) & 0x3fc) >> 2) | ((((uint32_t)rate) & 0x3) << 14);
 
+            uint32_t lower, higher;
             if (s0 <= e0) {
                 // UP SWEEP
                 lower = (uint32_t)s0;
@@ -298,10 +324,10 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 ins[5] = 0x01;
                 ins[6] = div;
 
-                memcpy(ins + 8, (uint8_t *)&asf, 4);
+                memcpy(ins + 8, (uint8_t *)&rate_word, 4);
                 memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
             } else {
-                // SWEEP DOWN
+                // DOWN SWEEP
                 lower = (uint32_t)e0;
                 higher = (uint32_t)s0;
 
@@ -309,20 +335,37 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
                 ins[6] = 0x01;
 
                 memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
-                memcpy(ins + 13, (uint8_t *)&asf, 4);
+                memcpy(ins + 13, (uint8_t *)&rate_word, 4);
             }
 
             // bit alignments
+            // the lower point needs to be in the bottom 10 bits of ACR
             lower = ((lower & 0xff) << 16) | (lower & 0xff00);
-            higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
-
             memcpy(ins + 1, (uint8_t *)&lower, 3);
+            // higher point goes in the top of CW1
+            higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
             memcpy(ins + 18, (uint8_t *)&higher, 4);
+
+            // set FRC for Amplitude Sweep mode with sweep accumulator set to autoclear
             memcpy(ins + 23, "\x40\x43\x10", 3);
+
+            if (DEBUG) {
+                printf(
+                    "Set ins #%d for channel %d from %12lf%% to %12lf%% with ramp rate %12lf%% and "
+                    "div of %d\n",
+                    addr, channel, s0, e0, rate, div);
+            }
 
         } else if (type == 2) {
             // FREQ Sweep
-
+            // Memory Map
+            // [ 0x04, FTW3, FTW2, FTW1, FTW0         *Frequency Tuning Word (Start point of sweep)
+            //   0X07,  FRR, RRR,                     *Linear Sweep Ramp Rate Register
+            //   0x08, RDW3, RDW2, RDW1, RDW1,        *Rising Delta Word Register
+            //   0x09, FDW3, FDW2, FDW1, FDW1,        *Falling Delta Word Register
+            //   0x0a,  CW3,  CW2,  CW1,  CW0,        *Sweep Endpoint
+            //   0x03, CFR3, CFR2, CFR1, CFR0         *Channel Function Register
+            // ]
             ins[0] = 0x04;
             ins[5] = 0x07;
             ins[6] = div;
@@ -332,48 +375,55 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             ins[18] = 0x0a;
             ins[23] = 0x03;
 
-            // convert from frequencies to tuning words
-            double conv = 4294967296.0 / ad9959.sys_clk;
-            uint32_t sword = round(s0 * conv);
-            uint32_t eword = round(e0 * conv);
-            uint32_t rword = round(rate * conv);
-
-            if (rword < 1) rword = 1;
-
-            // bit shifting to flip endianness
-            sword = ((sword & 0xff) << 24) | ((sword & 0xff00) << 8) | ((sword & 0xff0000) >> 8) |
-                    ((sword & 0xff000000) >> 24);
-            eword = ((eword & 0xff) << 24) | ((eword & 0xff00) << 8) | ((eword & 0xff0000) >> 8) |
-                    ((eword & 0xff000000) >> 24);
-            rword = ((rword & 0xff) << 24) | ((rword & 0xff00) << 8) | ((rword & 0xff0000) >> 8) |
-                    ((rword & 0xff000000) >> 24);
+            uint8_t s0_word[4], e0_word[4], rate_word[4];
+            double start_point, end_point, rampe_rate;
+            start_point = get_ftw(&ad9959, s0, s0_word);
+            end_point = get_ftw(&ad9959, e0, e0_word);
+            rampe_rate = get_ftw(&ad9959, rate, rate_word);
 
             // write instruction
+            uint8_t *lower, *higher;
             if (s0 <= e0) {
-                // sweep up
-                lower = sword;
-                higher = eword;
+                // SWEEP UP
+                lower = s0_word;
+                higher = e0_word;
 
                 ins[6] = 0x01;
-                memcpy(ins + 9, (uint8_t *)&rword, 4);
+                memcpy(ins + 9, (uint8_t *)&rate_word, 4);
                 memcpy(ins + 14, "\x00\x00\x00\x00", 4);
             } else {
-                // sweep down
+                // SWEEP DOWN
                 ins[7] = 0x01;
-                lower = eword;
-                higher = sword;
+                lower = e0_word;
+                higher = s0_word;
 
                 memcpy(ins + 9, "\xff\xff\xff\xff", 4);
-                memcpy(ins + 14, (uint8_t *)&rword, 4);
+                memcpy(ins + 14, (uint8_t *)&rate_word, 4);
             }
 
+            memcpy(ins + 1, lower, 4);
+            memcpy(ins + 19, higher, 4);
+
+            // set FRC for Freq Sweep mode with sweep accumulator set to autoclear
             memcpy(ins + 24, "\x80\x43\x10", 3);
-            memcpy(ins + 1, (uint8_t *)&lower, 4);
-            memcpy(ins + 19, (uint8_t *)&higher, 4);
+
+            if (DEBUG) {
+                printf(
+                    "Set ins #%d for channel %d from %12lf Hz to %12lf Hz with ramp rate %12lf Hz "
+                    "and div of %d\n",
+                    addr, channel, start_point, end_point, rampe_rate, div);
+            }
+
         } else if (type == 3) {
             // PHASE Sweep
-            uint32_t pow;
-
+            // Memory Map
+            // [ 0x05, POW1, POW0                     *Phase Offset Word (Start point of sweep)
+            //   0X07,  FRR, RRR,                     *Linear Sweep Ramp Rate Register
+            //   0x08, RDW3, RDW2, RDW1, RDW1,        *Rising Delta Word Register
+            //   0x09, FDW3, FDW2, FDW1, FDW1,        *Falling Delta Word Register
+            //   0x0a,  CW3,  CW2,  CW1,  CW0,        *Sweep Endpoint
+            //   0x03, CFR3, CFR2, CFR1, CFR0         *Channel Function Register
+            // ]
             ins[0] = 0x05;
             ins[3] = 0x07;
             ins[4] = div;
@@ -386,17 +436,19 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             // convert from degrees to tuning words
             s0 = round(s0 / 360.0 * 16384.0);
             e0 = round(e0 / 360.0 * 16384.0);
-            pow = round(rate / 360.0 * 16384.0);
+            rate = round(rate / 360.0 * 16384.0);
 
             // validate params
-            if (pow > 16384 - 1) pow = 16384 - 1;
-            if (pow < 1) pow = 1;
+            if (rate > 16384 - 1) rate = 16384 - 1;
+            if (rate < 1) rate = 1;
             if (s0 > 16384 - 1) s0 = 16384 - 1;
             if (e0 > 16384 - 1) e0 = 16384 - 1;
 
             // bit shifting to flip endianness
-            pow = ((pow & 0x3fc0) >> 6) | ((pow & 0x3f) << 10);
+            uint32_t rate_word;
+            rate_word = ((((uint32_t)rate) & 0x3fc0) >> 6) | ((((uint32_t)rate) & 0x3f) << 10);
 
+            uint32_t lower, higher;
             if (s0 <= e0) {
                 // sweep up
                 ins[4] = 0x01;
@@ -421,19 +473,14 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double ra
             memcpy(ins + 1, (uint8_t *)&lower, 2);
             memcpy(ins + 17, (uint8_t *)&higher, 4);
             memcpy(ins + 22, "\xc0\x43\x10", 3);
-        }
 
-        // setting profile pin trigger bits
-        if (s0 <= e0 && ad9959.channels == 1) {
-            instructions[offset - 1] |= 0xff;
-        } else if (s0 <= e0) {
-            instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
-
-        } else if (ad9959.channels == 1) {
-            instructions[offset - 1] |= 0x0f;
-        } else {
-            instructions[offset - 1] &= ~(1u << (channel + 4));
-            instructions[offset - 1] |= 1u << channel;
+            if (DEBUG) {
+                printf(
+                    "Set ins #%d for channel %d from %12lf deg to %12lf deg with ramp rate %12lf "
+                    "deg "
+                    "and div of %d\n",
+                    addr, channel, s0, e0, rate, div);
+            }
         }
     }
 
@@ -557,7 +604,7 @@ void loop() {
     readline();
     int local_status = get_status();
 
-    if (DEBUG) printf("%s\n", readstring);
+    // if (DEBUG) printf("%s\n", readstring);
 
     if (strncmp(readstring, "version", 7) == 0) {
         printf("%s\n", VERSION);
@@ -634,12 +681,13 @@ void loop() {
         } else if (channel < 0 || channel > 3) {
             printf("Invalid Channel - num must be in range 0-3\n");
         } else {
-            uint64_t word = send_freq(&ad9959, channel, freq);
+            uint8_t ftw[4];
+            freq = get_ftw(&ad9959, freq, ftw);
+            send_channel(0x04, channel, ftw, 4);
             update();
 
             if (DEBUG) {
-                double f = word * ad9959.sys_clk / 4294967296.l;
-                printf("Freq: %12lf\n", f);
+                printf("set freq: %lf\n", freq);
             }
 
             OK();
@@ -657,11 +705,13 @@ void loop() {
         } else if (channel < 0 || channel > 3) {
             printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
-            double resp = send_phase(channel, phase);
+            uint8_t pow[2];
+            double phase = get_pow(phase, pow);
+            send_channel(0x05, channel, pow, 2);
             update();
 
             if (DEBUG) {
-                printf("Phase: %12lf\n", resp);
+                printf("Phase: %12lf\n", phase);
             }
 
             OK();
@@ -679,11 +729,13 @@ void loop() {
         } else if (channel < 0 || channel > 3) {
             printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
-            double resp = send_amp(channel, amp);
+            uint8_t asf[3];
+            amp = get_asf(amp, asf);
+            send_channel(0x06, channel, asf, 3);
             update();
 
             if (DEBUG) {
-                printf("Amp: %12lf\n", resp);
+                printf("Amp: %12lf\n", amp);
             }
 
             OK();
@@ -701,8 +753,7 @@ void loop() {
         } else {
             // could do more validation to make sure it is a valid
             // multiply/system clock freq
-            uint8_t fr1[] = {0x01, mult << 2, 0x00, 0x00};
-            spi_write_blocking(spi1, fr1, 4);
+            set_pll_mult(&ad9959, mult);
             update();
 
             OK();
@@ -722,23 +773,20 @@ void loop() {
                 // Set new clock frequency
                 if (src == 0) {
                     if (set_sys_clock_khz(freq / 1000, false)) {
-                        ad9959.ref_clk = freq;
-                        ad9959.sys_clk = freq * ad9959.pll_mult;
+                        set_ref_clk(&ad9959, freq);
                         clock_configure(clk_peri, 0,
                                         CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                                         125 * MHZ);
                         clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
                         stdio_init_all();
                         OK();
-                        // clock_status = INTERNAL;
                     } else {
                         printf(
                             "Failure. Cannot exactly achieve that clock "
                             "frequency.");
                     }
                 } else {
-                    ad9959.ref_clk = freq;
-                    ad9959.sys_clk = freq * ad9959.pll_mult;
+                    set_ref_clk(&ad9959, freq);
                     gpio_deinit(PIN_CLOCK);
                     if (DEBUG) printf("AD9959 requires external reference clock\n");
                     OK();
@@ -762,7 +810,6 @@ void loop() {
             timing = _timing;
 
             if (ad9959.sweep_type == 0) {
-
                 uint8_t cfr[] = {0x03, 0x00, 0x03, 0x04};
                 // uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
                 // uint8_t pow[] = {0x05, 0x00, 0x00};
@@ -876,6 +923,12 @@ int main() {
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
+    // for some reason the first byte of communication seems to get corrupted without initializing
+    // twice
+    stdio_init_all();
+    // stdio_init_all();
+    // printf("\n==================================\n");
+
     set_sys_clock_khz(125 * MHZ / 1000, false);
 
     // output sys clock on a gpio pin to be used as REF_CLK for AD9959
@@ -917,19 +970,14 @@ int main() {
     dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0], instructions + TIMING_OFFSET, 0, false);
 
     // put AD9959 in a known state
-    ad9959.ref_clk = 125 * MHZ;
     init_pin(PIN_SYNC);
+    set_ref_clk(&ad9959, 125 * MHZ);
+    set_pll_mult(&ad9959, 4);
     reset();
 
     // for debugging purposes, this will clear the stored instrucitons on a reset
     // even if this is removed it should not be defined if the memory presists through power cycle
     memset(instructions, 0, MAX_SIZE);
-
-    // for some reason the first byte of communication seems to get corrupted without initializing
-    // twice
-    stdio_init_all();
-    // stdio_init_all();
-    // printf("\n==================================\n");
 
     while (true) {
         loop();
