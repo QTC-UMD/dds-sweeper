@@ -639,6 +639,8 @@ void loop() {
             "aborted).\n",
             readstring, STOPPED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
+        single_step_mode();
+        update();
         read_all();
         OK();
     } else if (strncmp(readstring, "load", 4) == 0) {
