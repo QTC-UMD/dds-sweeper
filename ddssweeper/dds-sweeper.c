@@ -189,23 +189,23 @@ void set_time(uint32_t addr, uint32_t time) {
 void set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
     uint8_t ins[30];
 
-    // number of times the CSR register will need be written in this step
-    uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-    // offset to the beginning of the step this instruction is in
-    // add 1 to skip past the profile pin mask in the first byte of the step
-    uint offset = (INS_SIZE * ad9959.channels + csrs * 2 + 1) * addr + 1;
-    // offset from the beginning of this step to the instruction for this
-    // channel
-    uint channel_offset = (INS_SIZE + (csrs ? 2 : 0)) * channel;
+    // for each step of buffered execution there is 1 byte of profile pin 
+    // instructions followed by the actual instruction for each channel
+
+    // add one at the end here for this steps profile pin byte
+    uint offset = (INS_SIZE * ad9959.channels + 1) * addr + 1;
+
+    // offset from the beginning of this step to where this channel's instruction goes
+    uint channel_offset = INS_SIZE * channel;
 
     // check there is enough space for this instruction
     uint tspace = timing ? TIMERS * 4 : 0;
-    if (offset + channel_offset + INS_SIZE + 2 + tspace >= MAX_SIZE) {
+    if (offset + channel_offset + INS_SIZE + tspace >= MAX_SIZE) {
         printf("Invalid Address\n");
         return;
     }
 
-    // check if this is a flow control instruction
+    // address flow control instructions
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
         if (channel == 5)
@@ -217,18 +217,27 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         return;
     }
 
+    // set csr
+    ins[0] = 0x00;
+    if (ad9959.channels == 1) {
+        ins[1] = 0xf2;
+    } else {
+        ins[1] = (1u << (channel + 4)) | 0x02;
+    }
+
     if (type == 0) {
         // SINGLE STEP
 
         // Memory Map (12 bytes)
-        // [ 0x04, FTW3, FTW2, FTW1, FTW0,  *Frequcney Tuning Word
+        // [ 0x00, CSR                      *Channel Select Register
+        //   0x04, FTW3, FTW2, FTW1, FTW0,  *Frequcney Tuning Word
         //   0x05, POW1, POW0,              *Phase Offset Word
         //   0x06, ACR2, ACR1, ACR0         *Amplitude Control Register
         // ]
 
-        ins[0] = 0x04;
-        ins[5] = 0x05;
-        ins[8] = 0x06;
+        ins[2] = 0x04;
+        ins[7] = 0x05;
+        ins[10] = 0x06;
 
         // profile pins do not matter for single tone mode, but the pio program
         // still expects a nonzero value for the profile pin mask
@@ -242,9 +251,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         phase = get_pow(delta, pow);
 
         // write instruction
-        memcpy(ins + 1, (uint8_t *)&ftw, 4);
-        memcpy(ins + 6, (uint8_t *)&pow, 2);
-        memcpy(ins + 9, (uint8_t *)&asf, 3);
+        memcpy(ins + 3, (uint8_t *)&ftw, 4);
+        memcpy(ins + 8, (uint8_t *)&pow, 2);
+        memcpy(ins + 11, (uint8_t *)&asf, 3);
 
         if (DEBUG) {
             printf(
@@ -282,19 +291,20 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         if (type == 1) {
             // AMP sweep
             // Memory Map
-            // [ 0x06, ACR2, ACR1, ACR0,                *Amplitude Control Register
+            // [ 0x00, CSR                              *Channel Select Register
+            //   0x06, ACR2, ACR1, ACR0,                *Amplitude Control Register
             //   0X07,  FRR,  RRR,                      *Linear Sweep Ramp Rate Register
             //   0x08, RDW3, RDW2, RDW1, RDW1,          *Rising Delta Word Register
             //   0x09, FDW3, FDW2, FDW1, FDW1,          *Falling Delta Word Register
             //   0x0a,  CW3,  CW2,  CW1,  CW0,          *Sweep Endpoint,
             //   0x03, CFR3, CFR2, CFR1, CFR0           *Channel Function Register
             // ]
-            ins[0] = 0x06;
-            ins[4] = 0x07;
-            ins[7] = 0x08;
-            ins[12] = 0x09;
-            ins[17] = 0x0a;
-            ins[22] = 0x03;
+            ins[2] = 0x06;
+            ins[6] = 0x07;
+            ins[9] = 0x08;
+            ins[14] = 0x09;
+            ins[19] = 0x0a;
+            ins[24] = 0x03;
 
             // calculations: go from percentages to integers between 0 and 1024
             s0 = round(s0 * 1024);
@@ -320,33 +330,33 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                 lower = (uint32_t)s0;
                 higher = (uint32_t)e0;
 
-                ins[5] = 0x01;
-                ins[6] = rate;
+                ins[7] = 0x01;
+                ins[8] = rate;
 
-                memcpy(ins + 8, (uint8_t *)&rate_word, 4);
-                memcpy(ins + 13, "\xff\xc0\x00\x00", 4);
+                memcpy(ins + 10, (uint8_t *)&rate_word, 4);
+                memcpy(ins + 15, "\xff\xc0\x00\x00", 4);
             } else {
                 // DOWN SWEEP
                 lower = (uint32_t)e0;
                 higher = (uint32_t)s0;
 
-                ins[5] = rate;
-                ins[6] = 0x01;
+                ins[7] = rate;
+                ins[8] = 0x01;
 
-                memcpy(ins + 8, "\xff\xc0\x00\x00", 4);
-                memcpy(ins + 13, (uint8_t *)&rate_word, 4);
+                memcpy(ins + 10, "\xff\xc0\x00\x00", 4);
+                memcpy(ins + 15, (uint8_t *)&rate_word, 4);
             }
 
             // bit alignments
             // the lower point needs to be in the bottom 10 bits of ACR
             lower = ((lower & 0xff) << 16) | (lower & 0xff00);
-            memcpy(ins + 1, (uint8_t *)&lower, 3);
+            memcpy(ins + 3, (uint8_t *)&lower, 3);
             // higher point goes in the top of CW1
             higher = ((higher & 0x3fc) >> 2) | ((higher & 0x3) << 14);
-            memcpy(ins + 18, (uint8_t *)&higher, 4);
+            memcpy(ins + 20, (uint8_t *)&higher, 4);
 
             // set FRC for Amplitude Sweep mode with sweep accumulator set to autoclear
-            memcpy(ins + 23, "\x40\x43\x10", 3);
+            memcpy(ins + 25, "\x40\x43\x10", 3);
 
             if (DEBUG) {
                 printf(
@@ -358,21 +368,22 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         } else if (type == 2) {
             // FREQ Sweep
             // Memory Map
-            // [ 0x04, FTW3, FTW2, FTW1, FTW0         *Frequency Tuning Word (Start point of sweep)
+            // [ 0x00, CSR                            *Channel Select Register
+            //   0x04, FTW3, FTW2, FTW1, FTW0         *Frequency Tuning Word (Start point of sweep)
             //   0X07,  FRR, RRR,                     *Linear Sweep Ramp Rate Register
             //   0x08, RDW3, RDW2, RDW1, RDW1,        *Rising Delta Word Register
             //   0x09, FDW3, FDW2, FDW1, FDW1,        *Falling Delta Word Register
             //   0x0a,  CW3,  CW2,  CW1,  CW0,        *Sweep Endpoint
             //   0x03, CFR3, CFR2, CFR1, CFR0         *Channel Function Register
             // ]
-            ins[0] = 0x04;
-            ins[5] = 0x07;
-            ins[6] = rate;
-            ins[7] = rate;
-            ins[8] = 0x08;
-            ins[13] = 0x09;
-            ins[18] = 0x0a;
-            ins[23] = 0x03;
+            ins[2] = 0x04;
+            ins[7] = 0x07;
+            ins[8] = rate;
+            ins[9] = rate;
+            ins[10] = 0x08;
+            ins[15] = 0x09;
+            ins[20] = 0x0a;
+            ins[25] = 0x03;
 
             uint8_t s0_word[4], e0_word[4], rate_word[4];
             double start_point, end_point, rampe_rate;
@@ -387,24 +398,24 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                 lower = s0_word;
                 higher = e0_word;
 
-                ins[6] = 0x01;
-                memcpy(ins + 9, (uint8_t *)&rate_word, 4);
-                memcpy(ins + 14, "\x00\x00\x00\x00", 4);
+                ins[8] = 0x01;
+                memcpy(ins + 11, (uint8_t *)&rate_word, 4);
+                memcpy(ins + 16, "\x00\x00\x00\x00", 4);
             } else {
                 // SWEEP DOWN
-                ins[7] = 0x01;
+                ins[9] = 0x01;
                 lower = e0_word;
                 higher = s0_word;
 
-                memcpy(ins + 9, "\xff\xff\xff\xff", 4);
-                memcpy(ins + 14, (uint8_t *)&rate_word, 4);
+                memcpy(ins + 11, "\xff\xff\xff\xff", 4);
+                memcpy(ins + 16, (uint8_t *)&rate_word, 4);
             }
 
-            memcpy(ins + 1, lower, 4);
-            memcpy(ins + 19, higher, 4);
+            memcpy(ins + 3, lower, 4);
+            memcpy(ins + 21, higher, 4);
 
             // set FRC for Freq Sweep mode with sweep accumulator set to autoclear
-            memcpy(ins + 24, "\x80\x43\x10", 3);
+            memcpy(ins + 26, "\x80\x43\x10", 3);
 
             if (DEBUG) {
                 printf(
@@ -416,21 +427,22 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         } else if (type == 3) {
             // PHASE Sweep
             // Memory Map
-            // [ 0x05, POW1, POW0                     *Phase Offset Word (Start point of sweep)
+            // [ 0x00, CSR                            *Channel Select Register
+            //   0x05, POW1, POW0                     *Phase Offset Word (Start point of sweep)
             //   0X07,  FRR, RRR,                     *Linear Sweep Ramp Rate Register
             //   0x08, RDW3, RDW2, RDW1, RDW1,        *Rising Delta Word Register
             //   0x09, FDW3, FDW2, FDW1, FDW1,        *Falling Delta Word Register
             //   0x0a,  CW3,  CW2,  CW1,  CW0,        *Sweep Endpoint
             //   0x03, CFR3, CFR2, CFR1, CFR0         *Channel Function Register
             // ]
-            ins[0] = 0x05;
-            ins[3] = 0x07;
-            ins[4] = rate;
-            ins[5] = rate;
-            ins[6] = 0x08;
-            ins[11] = 0x09;
-            ins[16] = 0x0a;
-            ins[21] = 0x03;
+            ins[2] = 0x05;
+            ins[5] = 0x07;
+            ins[6] = rate;
+            ins[7] = rate;
+            ins[8] = 0x08;
+            ins[13] = 0x09;
+            ins[18] = 0x0a;
+            ins[23] = 0x03;
 
             // convert from degrees to tuning words
             s0 = round(s0 / 360.0 * 16384.0);
@@ -450,28 +462,28 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             uint32_t lower, higher;
             if (s0 <= e0) {
                 // sweep up
-                ins[4] = 0x01;
+                ins[6] = 0x01;
                 lower = (uint32_t)s0;
                 higher = (uint32_t)e0;
 
-                memcpy(ins + 7, (uint8_t *)&pow, 4);
-                memcpy(ins + 12, "\x00\x00\x00\x00", 4);
+                memcpy(ins + 9, (uint8_t *)&pow, 4);
+                memcpy(ins + 14, "\x00\x00\x00\x00", 4);
             } else {
                 // sweep down
-                ins[5] = 0x01;
+                ins[7] = 0x01;
                 lower = (uint32_t)e0;
                 higher = (uint32_t)s0;
 
-                memcpy(ins + 7, "\xff\xff\xff\xff", 4);
-                memcpy(ins + 12, (uint8_t *)&pow, 4);
+                memcpy(ins + 9, "\xff\xff\xff\xff", 4);
+                memcpy(ins + 14, (uint8_t *)&pow, 4);
             }
 
             lower = ((lower & 0xff) << 8) | ((lower & 0xff00) >> 8);
             higher = ((higher & 0x3fc0) >> 6) | ((higher & 0x3f) << 10);
 
-            memcpy(ins + 1, (uint8_t *)&lower, 2);
-            memcpy(ins + 17, (uint8_t *)&higher, 4);
-            memcpy(ins + 22, "\xc0\x43\x10", 3);
+            memcpy(ins + 3, (uint8_t *)&lower, 2);
+            memcpy(ins + 19, (uint8_t *)&higher, 4);
+            memcpy(ins + 24, "\xc0\x43\x10", 3);
 
             if (DEBUG) {
                 printf(
@@ -491,18 +503,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
     //     printf("%02X ", ins[i]);
     // }
     // printf("\n\n");
-
-    // write the CSR commands to select the correct channel
-    if (ad9959.channels > 1) {
-        // each instruction ends by setting the csr so that it will be ready for
-        // the next instruction
-
-        // it may make the table more likely to survive an early trigger, since
-        // an early trigger at the end of an instruction would just interrupt
-        // the channel select bits, which do not need an update signal anyway
-        uint8_t csr[] = {0x00, 0x02 | (1u << (((channel + 1) % ad9959.channels) + 4))};
-        memcpy(instructions + offset + channel_offset + INS_SIZE, csr, 2);
-    }
 }
 
 // ================================================================================================
@@ -521,8 +521,7 @@ void background() {
         set_status(RUNNING);
 
         // pre-calculate spacing vars
-        uint csrs = ad9959.channels == 1 ? 0 : ad9959.channels;
-        uint step = INS_SIZE * ad9959.channels + csrs * 2 + 1;
+        uint step = INS_SIZE * ad9959.channels + 1;
         uint offset = 0;
 
         // count instructions to run
@@ -544,19 +543,8 @@ void background() {
         offset = i = 0;
         triggers = 0;
 
-        // does this matter?
-        // I think we should be able to write to all the registers with the first write
-        // since if single channel that is desired, otherwise the other channels will
-        // just get overwritten
-
         // sync just to be sure
         sync();
-
-        // set the initial channel select bits
-        // uint8_t csr[] = {0x00, ad9959.channels == 1 ? 0xf2 : 0x12};
-        // spi_write_blocking(spi1, csr, 2);
-        uint8_t csr[] = {0x00, 0xf2};
-        spi_write_blocking(spi1, csr, 2);
 
         // setup a single wait if in hwstart mode
         if (hwstart) {
@@ -590,6 +578,8 @@ void background() {
 
             wait(0);
         }
+
+        // clean up
         dma_channel_abort(timer_dma);
         pio_sm_clear_fifos(PIO_TRIG, 0);
         pio_sm_clear_fifos(PIO_TIME, 0);
@@ -807,7 +797,7 @@ void loop() {
         } else if (type > 3) {
             printf("Invalid Type - table type must be in range 0-3\n");
         } else {
-            uint8_t sizes[] = {12, 26, 27, 25};
+            uint8_t sizes[] = {14, 28, 29, 27};
             INS_SIZE = sizes[type];
             ad9959.sweep_type = type;
             timing = _timing;
