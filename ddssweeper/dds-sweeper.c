@@ -189,7 +189,7 @@ void set_time(uint32_t addr, uint32_t time) {
 void set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
     uint8_t ins[30];
 
-    // for each step of buffered execution there is 1 byte of profile pin 
+    // for each step of buffered execution there is 1 byte of profile pin
     // instructions followed by the actual instruction for each channel
 
     // add one at the end here for this steps profile pin byte
@@ -256,9 +256,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         memcpy(ins + 11, (uint8_t *)&asf, 3);
 
         if (DEBUG) {
-            printf(
-                "Set ins #%d for channel %d with amp: %12lf %% freq: %12lf Hz phase: %12lf deg\n",
-                addr, channel, amp, freq, phase);
+            printf("Set ins #%d for channel %d with amp: %3lf %% freq: %3lf Hz phase: %3lf deg\n",
+                   addr, channel, amp, freq, phase);
         }
 
     } else {
@@ -275,17 +274,17 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         // signifigant nibble should always be 0xf.
         if (s0 <= e0 && ad9959.channels == 1) {
             // case: upward sweep single channel mode
-            instructions[offset - 1] |= 0xff;
+            instructions[offset - 1] = 0xff;
         } else if (s0 <= e0) {
             // case: upward sweep on this channel
-            instructions[offset - 1] |= (1u << channel) | (1u << (channel + 4));
+            instructions[offset - 1] |= (1u << (3 - channel)) | (1u << (7 - channel));
         } else if (ad9959.channels == 1) {
             // case: downward sweep single channel mode
-            instructions[offset - 1] |= 0x0f;
+            instructions[offset - 1] = 0x0f;
         } else {
             // case: downward sweep on this channel
-            instructions[offset - 1] &= ~(1u << (channel + 4));
-            instructions[offset - 1] |= 1u << channel;
+            instructions[offset - 1] &= ~(1u << (7 - channel));
+            instructions[offset - 1] |= 1u << (3 - channel);
         }
 
         if (type == 1) {
@@ -312,7 +311,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             delta = round(delta * 1024);
 
             // ensure inside range
-            if (delta < 0) delta = 0;
+            if (delta < 1) delta = 1;
             if (s0 < 0) s0 = 0;
             if (e0 < 0) e0 = 0;
 
@@ -360,9 +359,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %12lf%% to %12lf%% with delta %12lf%% and "
+                    "Set ins #%d for channel %d from %3lf%% to %3lf%% with delta %3lf%% and "
                     "rate of %d\n",
-                    addr, channel, s0, e0, delta, rate);
+                    addr, channel, s0 / 10.23, e0 / 10.23, delta / 10.23, rate);
             }
 
         } else if (type == 2) {
@@ -410,16 +409,15 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                 memcpy(ins + 11, "\xff\xff\xff\xff", 4);
                 memcpy(ins + 16, (uint8_t *)&rate_word, 4);
             }
+            // set FRC for Freq Sweep mode with sweep accumulator set to autoclear
+            memcpy(ins + 26, "\x80\x43\x10", 3);
 
             memcpy(ins + 3, lower, 4);
             memcpy(ins + 21, higher, 4);
 
-            // set FRC for Freq Sweep mode with sweep accumulator set to autoclear
-            memcpy(ins + 26, "\x80\x43\x10", 3);
-
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %12lf Hz to %12lf Hz with delta %12lf Hz and "
+                    "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with delta %4lf Hz and "
                     "rate of %d\n",
                     addr, channel, start_point, end_point, rampe_rate, rate);
             }
@@ -487,9 +485,10 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %12lf deg to %12lf deg with delta %12lf "
-                    "deg and rate of %d\n",
-                    addr, channel, s0, e0, delta, rate);
+                    "Set ins #%d for channel %d from %4lf deg to %4lf deg with delta %4lf deg and "
+                    "rate of %d\n",
+                    addr, channel, s0 / 16384.0 * 360, e0 / 16384.0 * 360, delta / 16384.0 * 360,
+                    rate);
             }
         }
     }
