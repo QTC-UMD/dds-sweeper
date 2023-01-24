@@ -159,7 +159,7 @@ void reset() {
     ad9959.sweep_type = 1;
     ad9959.channels = 1;
 
-    single_step_mode();
+    clear();
     update();
 }
 
@@ -634,10 +634,12 @@ void loop() {
         read_all();
         OK();
     } else if (strncmp(readstring, "load", 4) == 0) {
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overread"
         memcpy(instructions, ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET)), MAX_SIZE);
 #pragma GCC diagnostic pop
+
         OK();
     } else if (strncmp(readstring, "save", 4) == 0) {
         uint32_t ints = save_and_disable_interrupts();

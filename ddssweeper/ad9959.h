@@ -35,5 +35,6 @@ void read_all();
 void set_pll_mult(ad9959_config* c, uint mult);
 void set_ref_clk(ad9959_config* c, uint64_t freq);
 void single_step_mode();
+void clear();
 
 #endif
