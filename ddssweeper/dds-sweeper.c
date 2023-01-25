@@ -700,7 +700,7 @@ void loop() {
             printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
             uint8_t pow[2];
-            double phase = get_pow(phase, pow);
+            phase = get_pow(phase, pow);
             send_channel(0x05, channel, pow, 2);
             update();
 
