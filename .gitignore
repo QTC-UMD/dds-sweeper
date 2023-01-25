@@ -1,7 +1,11 @@
 # ignore the build directory
 build/*
+!build/ddssweeper/
+build/ddssweeper/*
+!build/ddssweeper/dds-sweeper.uf2
 
 .vscode/
 
+# board gerber files
 dds-sweeper-board/*
 !dds-sweeper-board/gerbers/*
