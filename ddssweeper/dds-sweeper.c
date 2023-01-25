@@ -643,9 +643,9 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "save", 4) == 0) {
         uint32_t ints = save_and_disable_interrupts();
-        printf("Erasing...\n");
+        // printf("Erasing...\n");
         flash_range_erase(FLASH_TARGET_OFFSET, MAX_SIZE);
-        printf("Programming...\n");
+        // printf("Programming...\n");
         flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
         restore_interrupts(ints);
         OK();
