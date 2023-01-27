@@ -2,30 +2,26 @@
 Raspberry Pi Pico interface for the AD9959 DDS.
 
 
-
-A similar Project:
-https://github.com/Iherrbenza/AD9959_Python
-
 ## Specs
 
-| Type            | Min Time Between Instructions                                                            | Notes |
-|-----------------|------------------------------------------------------------------------------------------|-------|
-| Frequency       | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |       |
-| Phase           | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |       |
-| Amplitude       | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |       |
-| Single Stepping | # of channels in use<br>1: 4 &#956;s<br>2: 6 &#956;s<br>3: 8 &#956;s<br>4: 10 &#956;s    |       |
-
-- Supports 5000 instructions
+| Type            | Min Time Between Instructions                                                            |
+|-----------------|------------------------------------------------------------------------------------------|
+| Frequency       | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |
+| Phase           | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |
+| Amplitude       | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |
+| Single Stepping | # of channels in use<br>1: 4 &#956;s<br>2: 6 &#956;s<br>3: 8 &#956;s<br>4: 10 &#956;s    |
 
 * All the minimum timings are tied to the clock speed of the Pico. The ones listed are for the default 125 MHz clock speed.
 A slower base clock will require longer times between steps
+
+- Supports 5000 instructions
 
 ## How to flash the firmware
 Download the latest [dds-sweeper.uf2 file](https://github.com/naqslab/dds-sweeper/blob/main/build/ddssweeper/dds-sweeper.uf2).
 On your Raspberry Pi Pico, hold down the "bootsel" button while plugging the Pico into USB port on a PC (that must already be turned on).
 The Pico should mount as a mass storage device (if it doesn't, try again or consult the Pico documentation).
 Drag and drop the `.uf2` file into the mounted mass storage device.
-The mass storage device should unmount after the copy completes. Your Pico is now running the PrawnBlaster firmware!
+The mass storage device should unmount after the copy completes. Your Pico is now running the DDS Sweeper firmware!
 
 ## Notes
 - Output Amplitude is dependent on frequency (some people on Analog Devices forum mentioned amplitude and frequency are related by a sinc function)
@@ -67,7 +63,7 @@ Downward sweeps just dont work
 ![alt text](img/profile-pin-drop-after.png)  
 might be a lot of noise on transitions  
 ![alt text](img/noise-on-transition.png)   
-cannot slow down sweeps or it breaks 
+cannot slow downward sweeps or it breaks 
 
 - no autoclear, drop pin before update  
 ![alt text](img/no-auto-drop-before.png)  
