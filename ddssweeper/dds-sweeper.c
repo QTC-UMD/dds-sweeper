@@ -97,6 +97,13 @@ void init_pin(uint pin) {
     gpio_put(pin, 0);
 }
 
+void init_pio() {
+    uint offset = pio_add_program(PIO_TRIG, &trigger_program);
+    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, P3, PIN_UPDATE);
+    offset = pio_add_program(PIO_TIME, &timer_program);
+    timer_program_init(PIO_TIME, 0, offset, TRIGGER);
+}
+
 int get_status() {
     mutex_enter_blocking(&status_mutex);
     int temp = status;
@@ -172,9 +179,14 @@ void abort_run() {
     if (get_status() == RUNNING) {
         set_status(ABORTING);
 
-        // the Trigger PIO has already processed the next instruciton
-        // it needs to be flushed by using the Timer PIO to send a trigger signal
-        pio_sm_put(PIO_TIME, 0, 10);
+        // take control of trigger pin from PIO
+        init_pin(TRIGGER);
+        gpio_put(TRIGGER, 1);
+        sleep_ms(1);
+        gpio_put(TRIGGER, 0);
+
+        // reinit PIO to give Trigger pin back
+        init_pio();
     }
 }
 
@@ -183,7 +195,13 @@ void abort_run() {
 // ================================================================================================
 
 void set_time(uint32_t addr, uint32_t time) {
-    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = time - 10;
+    uint32_t cycles = time;
+    if (addr == 0) {
+        cycles -= 18;
+    } else {
+        cycles -= 10;
+    }
+    *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = cycles;
 }
 
 void set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
@@ -545,6 +563,10 @@ void background() {
         // sync just to be sure
         sync();
 
+        if (hwstart) {
+            pio_sm_put(PIO_TIME, 0, 0);
+        }
+
         while (status != ABORTING) {
             // check if last instruction
             if (i == num_ins) {
@@ -563,20 +585,11 @@ void background() {
 
             // if on the first instruction, begin the timer
             if (i == 0 && timing) {
-                if (hwstart) {
-                    wait(0);
-                }
-
                 dma_channel_transfer_from_buffer_now(timer_dma, instructions + TIMING_OFFSET,
                                                      num_ins);
-
-                if (!hwstart) {
-                    wait(0);
-                }
-
-            } else {
-                wait(0);
             }
+
+            wait(0);
 
             offset = step * ++i;
         }
@@ -927,8 +940,7 @@ void loop() {
 // ================================================================================================
 
 int main() {
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    init_pin(PICO_DEFAULT_LED_PIN);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
     // for some reason the first byte of communication seems to get corrupted without
@@ -962,10 +974,7 @@ int main() {
     mutex_init(&wait_mutex);
 
     // init the PIO
-    uint offset = pio_add_program(PIO_TRIG, &trigger_program);
-    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, P3, PIN_UPDATE);
-    offset = pio_add_program(PIO_TIME, &timer_program);
-    timer_program_init(PIO_TIME, 0, offset, TRIGGER);
+    init_pio();
 
     // setup dma
     timer_dma = dma_claim_unused_channel(true);

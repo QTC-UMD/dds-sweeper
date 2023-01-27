@@ -24,13 +24,20 @@ trigger:
 
 .side_set 1
 
-    pull block      side 0
-    mov x, osr      side 1
-    nop             side 1 [6]
+start:
+    pull block      side 0      ; pull the instruction from FIFO
+    mov x, osr      side 0      ; move from osr to scratch register
+    jmp !x hwstart  side 0      ; if instuciton is 0 that means hwstart
 
+    nop             side 1 [5]  ; if not hwstart, hit the trigger pin
 loop:
-    jmp x-- loop    side 0
-        
+    jmp x-- loop    side 0      ; count down to next trigger
+
+.wrap
+
+hwstart:
+    wait 1 gpio 8   side 0      ; wait for the trigger pin
+    jmp start       side 0
 
 
 
