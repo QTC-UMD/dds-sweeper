@@ -482,7 +482,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                 lower = (uint32_t)s0;
                 higher = (uint32_t)e0;
 
-                memcpy(ins + 9, (uint8_t *)&pow, 4);
+                memcpy(ins + 9, (uint8_t *)&rate_word, 4);
                 memcpy(ins + 14, "\x00\x00\x00\x00", 4);
             } else {
                 // sweep down
@@ -491,7 +491,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                 higher = (uint32_t)s0;
 
                 memcpy(ins + 9, "\xff\xff\xff\xff", 4);
-                memcpy(ins + 14, (uint8_t *)&pow, 4);
+                memcpy(ins + 14, (uint8_t *)&rate_word, 4);
             }
 
             lower = ((lower & 0xff) << 8) | ((lower & 0xff00) >> 8);
