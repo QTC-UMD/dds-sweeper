@@ -545,12 +545,6 @@ void background() {
         // sync just to be sure
         sync();
 
-        // setup a single wait if in hwstart mode
-        if (hwstart) {
-            pio_sm_put(PIO_TRIG, 0, 0x100);
-            wait(0);
-        }
-
         while (status != ABORTING) {
             // check if last instruction
             if (i == num_ins) {
@@ -569,13 +563,22 @@ void background() {
 
             // if on the first instruction, begin the timer
             if (i == 0 && timing) {
+                if (hwstart) {
+                    wait(0);
+                }
+
                 dma_channel_transfer_from_buffer_now(timer_dma, instructions + TIMING_OFFSET,
                                                      num_ins);
+
+                if (!hwstart) {
+                    wait(0);
+                }
+
+            } else {
+                wait(0);
             }
 
             offset = step * ++i;
-
-            wait(0);
         }
 
         // clean up
@@ -634,7 +637,6 @@ void loop() {
         read_all();
         OK();
     } else if (strncmp(readstring, "load", 4) == 0) {
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overread"
         memcpy(instructions, ((uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET)), MAX_SIZE);
@@ -961,7 +963,7 @@ int main() {
 
     // init the PIO
     uint offset = pio_add_program(PIO_TRIG, &trigger_program);
-    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, 9, P3, PIN_UPDATE);
+    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, P3, PIN_UPDATE);
     offset = pio_add_program(PIO_TIME, &timer_program);
     timer_program_init(PIO_TIME, 0, offset, TRIGGER);
 

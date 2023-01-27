@@ -38,7 +38,6 @@ loop:
 
     static inline void trigger_program_init(PIO pio, uint sm, uint offset, 
         uint trigger_pin,
-        uint soft_trig, 
         uint p_pin, 
         uint update_pin
     ) {
@@ -49,11 +48,10 @@ loop:
         pio_gpio_init(pio, p_pin + 3);
         pio_gpio_init(pio, update_pin);
         pio_gpio_init(pio, trigger_pin); 
-        pio_gpio_init(pio, soft_trig); 
 
         pio_sm_set_pindirs_with_mask(pio, sm,
-            (0xf << p_pin) | (1u << update_pin) | (1u << trigger_pin)| (1u << soft_trig),    
-            (0xf << p_pin) | (1u << update_pin) | (0u << trigger_pin)| (0u << soft_trig)    
+            (0xf << p_pin) | (1u << update_pin) | (0u << trigger_pin),    
+            (0xf << p_pin) | (1u << update_pin) | (1u << trigger_pin)    
         );
 
         pio_sm_config c = trigger_program_get_default_config(offset);
