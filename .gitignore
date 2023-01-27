@@ -9,3 +9,6 @@ build/ddssweeper/*
 # board gerber files
 dds-sweeper-board/*
 !dds-sweeper-board/gerbers/*
+
+# ignore jupyter nb files
+testing/.ipynb_checkpoints/*
