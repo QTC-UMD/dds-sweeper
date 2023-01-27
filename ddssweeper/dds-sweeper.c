@@ -513,13 +513,6 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
     // write the instruction to main memory
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
-
-    // // instruction printing for debugging
-    // printf("\n\nins: \n%02X ", instructions[offset - 1]);
-    // for (int i = 0; i < INS_SIZE; i++) {
-    //     printf("%02X ", ins[i]);
-    // }
-    // printf("\n\n");
 }
 
 // ================================================================================================
@@ -610,8 +603,6 @@ void loop() {
     readline();
     int local_status = get_status();
 
-    // if (DEBUG) printf("%s\n", readstring);
-
     if (strncmp(readstring, "version", 7) == 0) {
         printf("%s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
@@ -658,9 +649,9 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "save", 4) == 0) {
         uint32_t ints = save_and_disable_interrupts();
-        // printf("Erasing...\n");
+        // erase sections
         flash_range_erase(FLASH_TARGET_OFFSET, MAX_SIZE);
-        // printf("Programming...\n");
+        // reprogram
         flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
         restore_interrupts(ints);
         OK();
@@ -943,11 +934,7 @@ int main() {
     init_pin(PICO_DEFAULT_LED_PIN);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
-    // for some reason the first byte of communication seems to get corrupted without
-    // initializing twice
     stdio_init_all();
-    // stdio_init_all();
-    // printf("\n==================================\n");
 
     set_sys_clock_khz(125 * MHZ / 1000, false);
 
@@ -986,16 +973,11 @@ int main() {
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     dma_channel_configure(timer_dma, &c, &PIO_TIME->txf[0], instructions + TIMING_OFFSET, 0, false);
 
-    // put AD9959 in a known state
+    // put AD9959 in default state
     init_pin(PIN_SYNC);
     set_ref_clk(&ad9959, 125 * MHZ);
     set_pll_mult(&ad9959, 4);
     reset();
-
-    // for debugging purposes, this will clear the stored instrucitons on a reset
-    // even if this is removed it should not be defined if the memory presists through power
-    // cycle
-    memset(instructions, 0, MAX_SIZE);
 
     while (true) {
         loop();

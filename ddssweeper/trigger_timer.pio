@@ -49,11 +49,14 @@ hwstart:
         uint update_pin
     ) {
         
+        // profile pins
         pio_gpio_init(pio, p_pin + 0);
         pio_gpio_init(pio, p_pin + 1);
         pio_gpio_init(pio, p_pin + 2);
         pio_gpio_init(pio, p_pin + 3);
+        // IO_UPDATE to AD9959
         pio_gpio_init(pio, update_pin);
+        // External Trigger Pin
         pio_gpio_init(pio, trigger_pin); 
 
         pio_sm_set_pindirs_with_mask(pio, sm,
