@@ -35,7 +35,6 @@ The mass storage device should unmount after the copy completes. Your Pico is no
 
 ## Sweeps
 - Setting up a sweep:  
-<!-- ![chart alt text](img/sweeping-chart.png)   -->
 ![chart alt text](img/sweep-setup.png)  
 Sweeps are defined by two parameters, sweep delta and ramp rate. 
 - Sweep Delta defines the change in output amplitude/frequency/phase on each sweep step
@@ -47,44 +46,39 @@ $$ t = \frac{\textrm{Ramp Rate}}{\textrm{Sync Clock}} $$
 Using the Pico's 125 Mhz with a 4 times PLL Multiplier gives the AD9959 a system clock of 500 MHz and therefore a sync clock of 125 MHz. For upward sweeps the time between sweeps can range from $ \frac{1}{125 MHz} = 8 ns $ to $ \frac{255}{125 MHz} = 2.04 \mu s $. Downward sweeps will apply the sweep delta every $ \frac{1}{125 MHz} = 8 ns $.  
 Given the frequency resolution of $\frac{f_{sys clk}}{2^{32}}$, the smallest sweep delta is $ = \frac{1}{2^{32}} = 0.1164$ Hz. With the maximum ramp rates, the DDS-sweeper has a minimum sweeping rate of $\approx 47871$ Hz/sec when sweeping upwards or $\approx 12207031.25$ Hz/sec when sweeping downward.
 
-<!-- You need to define a rising/falling delta word (RDW/FDW) as well as as a ramp rate (RSRR/FSRR). The delta words define the change in frequency/amplitude/phase that is applied on each sweep step. For frequency this is Hz, phase is degrees, and amplitude is percentage points (as in percent of maximum output voltage). The ramp rate is how often that delta word is applied. A ramp rate of 1 means the delta word is applied every clock cycle, and since the maximum clock speed of the AD9959 is 125 MHz, this gives a minimum time step of 8 ns. The max value of the ramp rate is 256, which at 125 MHz corresponds to a time interval of 2.048 &#956;s.  -->
 
 ### Downward Sweeps:
-When trying to do a downward sweep you need to send an IO Update to set your new start/stop points, and you also need to drop the profile pin from high to low to actually start sweeping.
+Downward sweeps are not well supported by the AD9959, but they can still be done.
+The best method I have found for doing a downward sweep is to send the instructions via serial first, with the sweep autoclear bit set to active and the rising sweep tuning word set to the maximum.
+Then issue the IO_UPDATE signal while keeping the profile pin for that channel high.
+I belive this clears the sweep accumulator then quickly refills it with a max rate sweep before beginning the downward sweep. 
+Other combinations of autoclear bit active or not and timing of the profile pins seem to cause even more issues with downward sweeps.
+The biggest downside of this method is that you cannot slow down the downward sweep ramp rate as much as the upward sweep ramp rate.
 
 
-- autoclear accumulator, drop the pin before the update  
-![alt text](img/profile-pin-drop.png)  
-Downward sweeps just dont work  
-![alt text](img/no-down-sweeps.png)  
+- Autoclear Accumulator Active, drop the pin after the update:  
+  Seems to work, you just cannot slow down downward sweeps. 
+  ![alt text](img/profile-pin-drop-after.png)  
+  ![alt text](img/noise-on-transition.png)   
 
+- Autoclear Accumulator Active, drop the pin before the update:  
+  Downward sweeps just dont work at all.  
+  ![alt text](img/profile-pin-drop.png)  
+  ![alt text](img/no-down-sweeps.png)  
 
-- autoclear accumulator, drop the pin after the update  
-![alt text](img/profile-pin-drop-after.png)  
-might be a lot of noise on transitions  
-![alt text](img/noise-on-transition.png)   
-cannot slow downward sweeps or it breaks 
+- no autoclear, drop pin before update:  
+  You cannot do consecutive down sweeps - every down sweep must be preceeded by an up sweep
+  ![alt text](img/no-auto-drop-before.png)  
+  ![alt text](img/consecutive-downs.png)  
 
-- no autoclear, drop pin before update  
-![alt text](img/no-auto-drop-before.png)  
-You cannot do consecutive down sweeps - every down sweep must be preceeded by an up sweep
-![alt text](img/consecutive-downs.png)  
+- no autoclear, drop pin after update:    
+  A down sweep after an up sweep cannot cover a greater distance than the upward sweep
+  ![alt text](img/no-auto-drop-after.png)  
+  ![alt text](img/incomplete-sweep-after.png)  
 
-- no autoclear, drop pin after update    
-![alt text](img/no-auto-drop-after.png)  
-A down sweep after an up sweep cannot cover a greater distance
-![alt text](img/incomplete-sweep-after.png)  
-you can slow down sweeps as much as you want
-
-- down sweeps using up sweeps above cutoff frequency
-Auto After:  
-![alt text](img/aan.png)  
-Auto Before:  
-![alt text](img/abn.png)  
-No-Auto After:  
-![alt text](img/nan.png)  
-No-Auto Before:  
-![alt text](img/nbn.png)  
+- You can also generate a downward sweep by operating the AS9959 above the nyquist frequency.
+This method does work but causes discontinuity when switching which band the AD9959 is working in.  
+![alt text](img/aan.png)
 
 
 
