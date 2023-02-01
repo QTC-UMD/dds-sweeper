@@ -1,3 +1,4 @@
+
 /*
 #######################################################################
 #                                                                     #
@@ -72,9 +73,9 @@ int status = STOPPED;
 // For responding OK to successful commands
 #define OK() printf("ok\n")
 
-// ================================================================================================
+// =============================================================================
 // global variables
-// ================================================================================================
+// =============================================================================
 ad9959_config ad9959;
 char readstring[256];
 bool DEBUG = true;
@@ -87,9 +88,9 @@ uint timer_dma;
 uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
 
-// ================================================================================================
+// =============================================================================
 // Utility Functions
-// ================================================================================================
+// =============================================================================
 
 void init_pin(uint pin) {
     gpio_init(pin);
@@ -190,9 +191,9 @@ void abort_run() {
     }
 }
 
-// ================================================================================================
+// =============================================================================
 // Set Table Instructions
-// ================================================================================================
+// =============================================================================
 
 void set_time(uint32_t addr, uint32_t time) {
     uint32_t cycles = time;
@@ -204,7 +205,7 @@ void set_time(uint32_t addr, uint32_t time) {
     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = cycles;
 }
 
-void set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
+bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
     uint8_t ins[30];
 
     // for each step of buffered execution there is 1 byte of profile pin
@@ -218,9 +219,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
     // check there is enough space for this instruction
     uint tspace = timing ? TIMERS * 4 : 0;
-    if (offset + channel_offset + INS_SIZE + tspace >= MAX_SIZE) {
+    if (offset + channel_offset + INS_SIZE + tspace >= MAX_SIZE || (timing && addr > TIMERS)) {
         printf("Invalid Address\n");
-        return;
+        return false;
     }
 
     // address flow control instructions
@@ -232,7 +233,7 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         else
             // end instruction
             instructions[offset] = 0x00;
-        return;
+        return true;
     }
 
     // set csr
@@ -274,8 +275,10 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         memcpy(ins + 11, (uint8_t *)&asf, 3);
 
         if (DEBUG) {
-            printf("Set ins #%d for channel %d with amp: %3lf %% freq: %3lf Hz phase: %3lf deg\n",
-                   addr, channel, amp, freq, phase);
+            printf(
+                "Set ins #%d for channel %d with amp: %3lf %% freq: %3lf Hz phase: %3lf "
+                "deg\n",
+                addr, channel, amp, freq, phase);
         }
 
     } else {
@@ -287,9 +290,9 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         // then only if it is a downward sweep drop the profile pin low
 
         // The profile pin directions for a single table step are stored in a single byte
-        // The least signifigant 4 bits in the byte corespond to the first value the profile pin
-        // hits during an update. Since the pin should always go high first, that means the least
-        // signifigant nibble should always be 0xf.
+        // The least signifigant 4 bits in the byte corespond to the first value the
+        // profile pin hits during an update. Since the pin should always go high first,
+        // that means the least signifigant nibble should always be 0xf.
         if (s0 <= e0 && ad9959.channels == 1) {
             // case: upward sweep single channel mode
             instructions[offset - 1] = 0xff;
@@ -377,21 +380,21 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %3lf%% to %3lf%% with delta %3lf%% and "
-                    "rate of %d\n",
+                    "Set ins #%d for channel %d from %3lf%% to %3lf%% with delta %3lf%% "
+                    "and rate of %d\n",
                     addr, channel, s0 / 10.23, e0 / 10.23, delta / 10.23, rate);
             }
 
         } else if (type == 2) {
             // FREQ Sweep
             // Memory Map
-            // [ 0x00, CSR                            *Channel Select Register
-            //   0x04, FTW3, FTW2, FTW1, FTW0         *Frequency Tuning Word (Start point of sweep)
-            //   0X07,  FRR, RRR,                     *Linear Sweep Ramp Rate Register
-            //   0x08, RDW3, RDW2, RDW1, RDW1,        *Rising Delta Word Register
-            //   0x09, FDW3, FDW2, FDW1, FDW1,        *Falling Delta Word Register
-            //   0x0a,  CW3,  CW2,  CW1,  CW0,        *Sweep Endpoint
-            //   0x03, CFR3, CFR2, CFR1, CFR0         *Channel Function Register
+            // [ 0x00, CSR                        *Channel Select Register
+            //   0x04, FTW3, FTW2, FTW1, FTW0     *Frequency Tuning Word (Start point of sweep)
+            //   0X07,  FRR, RRR,                 *Linear Sweep Ramp Rate Register
+            //   0x08, RDW3, RDW2, RDW1, RDW1,    *Rising Delta Word Register
+            //   0x09, FDW3, FDW2, FDW1, FDW1,    *Falling Delta Word Register
+            //   0x0a,  CW3,  CW2,  CW1,  CW0,    *Sweep Endpoint
+            //   0x03, CFR3, CFR2, CFR1, CFR0     *Channel Function Register
             // ]
             ins[2] = 0x04;
             ins[7] = 0x07;
@@ -435,21 +438,21 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with delta %4lf Hz and "
-                    "rate of %d\n",
+                    "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with delta %4lf "
+                    "Hz and rate of %d\n",
                     addr, channel, start_point, end_point, rampe_rate, rate);
             }
 
         } else if (type == 3) {
             // PHASE Sweep
             // Memory Map
-            // [ 0x00, CSR                            *Channel Select Register
-            //   0x05, POW1, POW0                     *Phase Offset Word (Start point of sweep)
-            //   0X07,  FRR, RRR,                     *Linear Sweep Ramp Rate Register
-            //   0x08, RDW3, RDW2, RDW1, RDW1,        *Rising Delta Word Register
-            //   0x09, FDW3, FDW2, FDW1, FDW1,        *Falling Delta Word Register
-            //   0x0a,  CW3,  CW2,  CW1,  CW0,        *Sweep Endpoint
-            //   0x03, CFR3, CFR2, CFR1, CFR0         *Channel Function Register
+            // [ 0x00, CSR                          *Channel Select Register
+            //   0x05, POW1, POW0                   *Phase Offset Word (Start point of sweep)
+            //   0X07,  FRR, RRR,                   *Linear Sweep Ramp Rate Register
+            //   0x08, RDW3, RDW2, RDW1, RDW1,      *Rising Delta Word Register
+            //   0x09, FDW3, FDW2, FDW1, FDW1,      *Falling Delta Word Register
+            //   0x0a,  CW3,  CW2,  CW1,  CW0,      *Sweep Endpoint
+            //   0x03, CFR3, CFR2, CFR1, CFR0       *Channel Function Register
             // ]
             ins[2] = 0x05;
             ins[5] = 0x07;
@@ -503,8 +506,8 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (DEBUG) {
                 printf(
-                    "Set ins #%d for channel %d from %4lf deg to %4lf deg with delta %4lf deg and "
-                    "rate of %d\n",
+                    "Set ins #%d for channel %d from %4lf deg to %4lf deg with delta "
+                    "%4lf deg and rate of %d\n",
                     addr, channel, s0 / 16384.0 * 360, e0 / 16384.0 * 360, delta / 16384.0 * 360,
                     rate);
             }
@@ -513,11 +516,12 @@ void set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
     // write the instruction to main memory
     memcpy(instructions + offset + channel_offset, ins, INS_SIZE);
+    return true;
 }
 
-// ================================================================================================
+// =============================================================================
 // Table Running Loop
-// ================================================================================================
+// =============================================================================
 
 void background() {
     // let other core know ready
@@ -595,9 +599,9 @@ void background() {
     }
 }
 
-// ================================================================================================
+// =============================================================================
 // Serial Communication Loop
-// ================================================================================================
+// =============================================================================
 
 void loop() {
     readline();
@@ -632,8 +636,7 @@ void loop() {
     else if (local_status != STOPPED) {
         printf(
             "Cannot execute command \"%s\" during buffered execution. Check "
-            "status first and wait for it to return %d (stopped or "
-            "aborted).\n",
+            "status first and wait for it to return %d (stopped or aborted).\n",
             readstring, STOPPED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         single_step_mode();
@@ -763,9 +766,7 @@ void loop() {
         uint freq;  // in Hz (up to 133 MHz)
         int parsed = sscanf(readstring, "%*s %u %u", &src, &freq);
         if (parsed < 2) {
-            printf(
-                "Missing Argument - expected: setclock <mode:int> "
-                "<freq:int>\n");
+            printf("Missing Argument - expected: setclock <mode:int> <freq:int>\n");
         } else {
             if (src > 1) {
                 printf("Invalid Mode - mode must be in range 0-1\n");
@@ -781,9 +782,7 @@ void loop() {
                         stdio_init_all();
                         OK();
                     } else {
-                        printf(
-                            "Failure. Cannot exactly achieve that clock "
-                            "frequency.");
+                        printf("Failure. Cannot exactly achieve that clock frequency.");
                     }
                 } else {
                     set_ref_clk(&ad9959, freq);
@@ -841,17 +840,16 @@ void loop() {
                 printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
             } else if (!timing && parsed < 5 && channel < 4) {
                 printf(
-                    "Missing Argument - expected: set <channel:int> <addr:int> "
-                    "<frequency:double> <amplitude:double> <phase:double> "
-                    "(<time:int>)\n");
+                    "Missing Argument - expected: set <channel:int> <addr:int> <frequency:double> "
+                    "<amplitude:double> <phase:double> (<time:int>)\n");
             } else if (timing && parsed < 6 && channel < 4) {
                 printf(
                     "No Time Given - expected: set <channel:int> <addr:int> "
                     "<frequency:double> <amplitude:double> <phase:double> "
                     "<time:int>\n");
             } else {
-                set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
-                if (timing) {
+                bool succsess = set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
+                if (succsess && timing) {
                     set_time(addr, time);
                 }
             }
@@ -883,8 +881,8 @@ void loop() {
                     "<start_point:double> <end_point:double> <delta:double> "
                     "<rate:int> <time:int>\n");
             } else {
-                set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate);
-                if (timing) {
+                bool succsess = set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate);
+                if (succsess && timing) {
                     set_time(addr, time);
                 }
             }
@@ -926,9 +924,9 @@ void loop() {
     }
 }
 
-// ================================================================================================
+// =============================================================================
 // Initial Setup
-// ================================================================================================
+// =============================================================================
 
 int main() {
     init_pin(PICO_DEFAULT_LED_PIN);

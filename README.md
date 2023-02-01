@@ -4,17 +4,26 @@ Raspberry Pi Pico interface for the AD9959 DDS.
 
 ## Specs
 
-| Type            | Min Time Between Instructions                                                            |
-|-----------------|------------------------------------------------------------------------------------------|
-| Frequency       | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |
-| Phase           | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |
-| Amplitude       | # of channels in use<br>1: 8 &#956;s<br>2: 12 &#956;s<br>3: 16 &#956;s<br>4: 20 &#956;s  |
-| Single Stepping | # of channels in use<br>1: 4 &#956;s<br>2: 6 &#956;s<br>3: 8 &#956;s<br>4: 10 &#956;s    |
+- The timing capabilities of the DDS-Sweeper are tied to the number of clock cycles the pico takes to send the next instruciton.  
+| Table Mode      | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
+|-----------------|-----------|-----------|-----------|-----------|
+| Single Stepping | 500       | 750       | 1000      | 1250      |
+| Sweep Mode      | 1000      | 1500      | 2000      | 2500      |
 
-* All the minimum timings are tied to the clock speed of the Pico. The ones listed are for the default 125 MHz clock speed.
-A slower base clock will require longer times between steps
+- At the default Pico Clock frequency of 125 MHz those clock cycle counts correspond to the following times:  
+| Table Mode      | 1 Channel | 2 Channel  | 3 Channel  | 4 Channel  |
+|-----------------|-----------|------------|------------|------------|
+| Single Stepping | 4 $\mu s$ | 6  $\mu s$ | 8  $\mu s$ | 10 $\mu s$ |
+| Sweep Mode      | 8 $\mu s$ | 12 $\mu s$ | 16 $\mu s$ | 20 $\mu s$ |
 
-- Supports 5000 instructions
+
+- The number of instructions you can store in the table depends no the type of sweep being performed and the number of channels being used.  
+| Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
+|-----------------------------|-----------|-----------|-----------|-----------|
+| Single Stepping             | 5000      | 5000      | 5000      | 4032      |
+| Sweep Mode                  | 5000      | 3895      | 2611      | 1964      |
+| Single Stepping (Ext Timer) | 16656     | 8615      | 5810      | 4383      |
+| Sweep Mode (Ext Timer)      | 8327      | 4234      | 2838      | 2135      |
 
 ## How to flash the firmware
 Download the latest [dds-sweeper.uf2 file](https://github.com/naqslab/dds-sweeper/blob/main/build/ddssweeper/dds-sweeper.uf2).
@@ -43,8 +52,10 @@ Sweeps are defined by two parameters, sweep delta and ramp rate.
 
 The time between sweep steps can be calculated with:
 $$ t = \frac{\textrm{Ramp Rate}}{\textrm{Sync Clock}} $$
-Using the Pico's 125 Mhz with a 4 times PLL Multiplier gives the AD9959 a system clock of 500 MHz and therefore a sync clock of 125 MHz. For upward sweeps the time between sweeps can range from $ \frac{1}{125 MHz} = 8 ns $ to $ \frac{255}{125 MHz} = 2.04 \mu s $. Downward sweeps will apply the sweep delta every $ \frac{1}{125 MHz} = 8 ns $.  
-Given the frequency resolution of $\frac{f_{sys clk}}{2^{32}}$, the smallest sweep delta is $ = \frac{1}{2^{32}} = 0.1164$ Hz. With the maximum ramp rates, the DDS-sweeper has a minimum sweeping rate of $\approx 47871$ Hz/sec when sweeping upwards or $\approx 12207031.25$ Hz/sec when sweeping downward.
+Using the Pico's 125 Mhz with a 4 times PLL Multiplier gives the AD9959 a system clock of 500 MHz and therefore a sync clock of 125 MHz.
+For upward sweeps the time between sweeps can range from $\frac{1}{125 MHz} = 8 ns$ to $\frac{255}{125 MHz} = 2.04 \mu s$.
+Downward sweeps will apply the sweep delta every $\frac{1}{125 MHz} = 8 ns$.  
+Given the frequency resolution of $\frac{f_{sys clk}}{2^{32}}$, the smallest sweep delta is $= \frac{1}{2^{32}} = 0.1164$ Hz. With the maximum ramp rates, the DDS-sweeper has a minimum sweeping rate of $\approx 47871$ Hz/sec when sweeping upwards or $\approx 12207031.25$ Hz/sec when sweeping downward.
 
 
 ### Downward Sweeps:
@@ -67,12 +78,12 @@ The biggest downside of this method is that you cannot slow down the downward sw
   ![alt text](img/no-down-sweeps.png)  
 
 - no autoclear, drop pin before update:  
-  You cannot do consecutive down sweeps - every down sweep must be preceeded by an up sweep
+  You cannot do consecutive down sweeps - every down sweep must be preceeded by an up sweep  
   ![alt text](img/no-auto-drop-before.png)  
   ![alt text](img/consecutive-downs.png)  
 
 - no autoclear, drop pin after update:    
-  A down sweep after an up sweep cannot cover a greater distance than the upward sweep
+  A down sweep after an up sweep cannot cover a greater distance than the upward sweep  
   ![alt text](img/no-auto-drop-after.png)  
   ![alt text](img/incomplete-sweep-after.png)  
 
