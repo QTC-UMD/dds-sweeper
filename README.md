@@ -44,7 +44,7 @@ The mass storage device should unmount after the copy completes. Your Pico is no
 
 ## Sweeps
 - Setting up a sweep:  
-![chart alt text](img/sweep-setup.png)  
+![Sweep Setup Figure](img/sweep-setup.png)  
 Sweeps are defined by two parameters, sweep delta and ramp rate. 
 - Sweep Delta defines the change in output amplitude/frequency/phase on each sweep step
 - Ramp rate defines how often a sweep step is taken. It is based off of the AD9959's sync clock signal which will be one quarter of the AD9959's system clock. The ramp rate parameter specifies the number of sync clock cycles per sweep step. A ramp rate of 1 will cause the sweep delta to be applied every 1 sync clock cycle. For upward sweeps, the ramp rate parameter can have a value of 1-255. For downward sweeps the ramp rate can only be 1.  
@@ -69,27 +69,27 @@ The biggest downside of this method is that you cannot slow down the downward sw
 
 - Autoclear Accumulator Active, drop the pin after the update:  
   Seems to work, you just cannot slow down downward sweeps. 
-  ![alt text](img/profile-pin-drop-after.png)  
-  ![alt text](img/noise-on-transition.png)   
+  ![Autoclear Accumulator Active, drop the pin after the update Closeup](img/profile-pin-drop-after.png)  
+  ![Autoclear Accumulator Active, drop the pin after the update Multiple Sweeps](img/noise-on-transition.png)   
 
 - Autoclear Accumulator Active, drop the pin before the update:  
   Downward sweeps just dont work at all.  
-  ![alt text](img/profile-pin-drop.png)  
-  ![alt text](img/no-down-sweeps.png)  
+  ![Autoclear Accumulator Active, drop the pin before the update: Closeup](img/profile-pin-drop.png)  
+  ![Autoclear Accumulator Active, drop the pin before the update: Multiple Sweeps](img/no-down-sweeps.png)  
 
 - no autoclear, drop pin before update:  
   You cannot do consecutive down sweeps - every down sweep must be preceeded by an up sweep  
-  ![alt text](img/no-auto-drop-before.png)  
-  ![alt text](img/consecutive-downs.png)  
+  ![no autoclear, drop pin before update: Closeup](img/no-auto-drop-before.png)  
+  ![no autoclear, drop pin before update: Multiple Sweeps](img/consecutive-downs.png)  
 
 - no autoclear, drop pin after update:    
   A down sweep after an up sweep cannot cover a greater distance than the upward sweep  
-  ![alt text](img/no-auto-drop-after.png)  
-  ![alt text](img/incomplete-sweep-after.png)  
+  ![no autoclear, drop pin after update: Closeup](img/no-auto-drop-after.png)  
+  ![no autoclear, drop pin after update: Multiple Sweeps](img/incomplete-sweep-after.png)  
 
 - You can also generate a downward sweep by operating the AS9959 above the nyquist frequency.
 This method does work but causes discontinuity when switching which band the AD9959 is working in.  
-![alt text](img/aan.png)
+![Scope trace of noise on DDS band transitions](img/aan.png)
 
 
 
