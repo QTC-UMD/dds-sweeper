@@ -5,12 +5,16 @@ Raspberry Pi Pico interface for the AD9959 DDS.
 ## Specs
 
 - The timing capabilities of the DDS-Sweeper are tied to the number of clock cycles the pico takes to send the next instruciton.  
+
+
 | Table Mode      | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------|-----------|-----------|-----------|-----------|
 | Single Stepping | 500       | 750       | 1000      | 1250      |
 | Sweep Mode      | 1000      | 1500      | 2000      | 2500      |
 
 - At the default Pico Clock frequency of 125 MHz those clock cycle counts correspond to the following times:  
+
+
 | Table Mode      | 1 Channel | 2 Channel  | 3 Channel  | 4 Channel  |
 |-----------------|-----------|------------|------------|------------|
 | Single Stepping | 4 $\mu s$ | 6  $\mu s$ | 8  $\mu s$ | 10 $\mu s$ |
@@ -18,6 +22,8 @@ Raspberry Pi Pico interface for the AD9959 DDS.
 
 
 - The number of instructions you can store in the table depends no the type of sweep being performed and the number of channels being used.  
+
+
 | Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------------------|-----------|-----------|-----------|-----------|
 | Single Stepping             | 5000      | 5000      | 5000      | 4032      |
