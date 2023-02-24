@@ -12,3 +12,6 @@ dds-sweeper-board/*
 
 # ignore jupyter nb files
 testing/.ipynb_checkpoints/*
+
+# ignore the printed files
+printed/*
