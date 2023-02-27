@@ -809,14 +809,8 @@ void loop() {
             timing = _timing;
 
             if (ad9959.sweep_type == 0) {
-                uint8_t cfr[] = {0x03, 0x00, 0x03, 0x04};
-                // uint8_t ftw[] = {0x04, 0x00, 0x00, 0x00, 0x00};
-                // uint8_t pow[] = {0x05, 0x00, 0x00};
-                // uint8_t acr[] = {0x06, 0x00, 0x00, 0x00};
-
-                uint8_t csr[] = {0x00, 0xf2};
-                spi_write_blocking(spi1, csr, 2);
-                spi_write_blocking(spi1, cfr, 4);
+                single_step_mode();
+                update();
             }
 
             OK();

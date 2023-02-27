@@ -140,7 +140,7 @@ void set_ref_clk(ad9959_config* c, uint64_t freq) { c->ref_clk = freq; }
 void single_step_mode() {
     uint8_t csr = 0xf2;
     send(0x00, &csr, 1);
-    uint8_t cfr[3] = {0x00, 0x03, 0x04};
+    uint8_t cfr[3] = {0x00, 0x03, 0x00};
     send(0x03, cfr, 3);
 }
 
