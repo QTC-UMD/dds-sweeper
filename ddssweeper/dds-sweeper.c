@@ -70,6 +70,12 @@ int status = STOPPED;
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
+// minimum wait lengths
+#define WAITS_SS_PER 250
+#define WAITS_SS_BASE (500 - WAITS_SS_PER)
+#define WAITS_SW_PER 500
+#define WAITS_SW_BASE (1000 - WAITS_SW_PER)
+
 // For responding OK to successful commands
 #define OK() printf("ok\n")
 
@@ -195,9 +201,23 @@ void abort_run() {
 // Set Table Instructions
 // =============================================================================
 
-void set_time(uint32_t addr, uint32_t time) {
+void set_time(uint32_t addr, uint32_t time, int sweep_type, uint channels) {
     uint32_t cycles = time;
+
+    if (sweep_type == 0) {
+        // single stepping
+        if (cycles < WAITS_SS_BASE + WAITS_SS_PER * channels) {
+            cycles = WAITS_SS_BASE + WAITS_SS_PER * channels;
+        }
+    } else {
+        // sweeping
+        if (cycles < WAITS_SW_BASE + WAITS_SW_PER * channels) {
+            cycles = WAITS_SW_BASE + WAITS_SW_PER * channels;
+        }
+    }
+
     if (addr == 0) {
+        // the first time through pio takes longer
         cycles -= 18;
     } else {
         cycles -= 10;
@@ -844,7 +864,7 @@ void loop() {
             } else {
                 bool succsess = set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
                 if (succsess && timing) {
-                    set_time(addr, time);
+                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
                 }
             }
 
@@ -877,7 +897,7 @@ void loop() {
             } else {
                 bool succsess = set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate);
                 if (succsess && timing) {
-                    set_time(addr, time);
+                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
                 }
             }
 
