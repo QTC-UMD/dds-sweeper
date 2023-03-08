@@ -122,18 +122,6 @@ Responds with a multi-line string containing the current operating frequencies o
 Turns on extra debug messages printed over serial. `state` should be `on` or `off` (no string quotes required).
 
 
-* `setfreq <channel:int> <frequency:float>`:  
-Manually set the output frequency of a specified channel. Channels are 0-3 and frequencies are in Hz. If `debug` is set to on, it will respond with the actual frequency set.
-
-
-* `setphase <channel:int> <phase_offset:float>`:  
-Manually set the phase offset of a specified channel. Channels are 0-3 and offsets are in degrees. If `debug` is set to on, it will respond with the actual degree offset set.
-
-
-* `setamp <channel:int> <amplituce_scale_factor:float>`:  
-Manually set the amplitude scale factor of a specified channel. Channels are 0-3 and amplitude scale factors are a precentage of the maximum output voltage. If `debug` is set to on, it will respond with the actual frequency set.
-
-
 * `mode <sweep-type:int> <trigger-source:int>`:  
 Configures what mode the DDS-Sweeper is operating in
   - 0: single stepping / manual mode
@@ -143,6 +131,19 @@ Configures what mode the DDS-Sweeper is operating in
 
   The operating mode must be set before buffered execution instructions can be programmed into the DDS-Sweeper.  
   A `trigger-source` of `0` means the Sweeper is expecting external triggers. A `trigger-source` of `1` means the Sweeper will send its own triggers and `set` commands will require an aditional `time` argument.
+  The Sweeper must be in manual mode in order for the `setfreq`, `setphase`, and `setamp` commands to work.
+
+
+* `setfreq <channel:int> <frequency:float>`:  
+Manually set the output frequency of a specified channel. Channels are 0-3 and frequencies are in Hz. If `debug` is set to on, it will respond with the actual frequency set. The Sweeper must be in manual mode.
+
+
+* `setphase <channel:int> <phase_offset:float>`:  
+Manually set the phase offset of a specified channel. Channels are 0-3 and offsets are in degrees. If `debug` is set to on, it will respond with the actual degree offset set. The Sweeper must be in manual mode.
+
+
+* `setamp <channel:int> <amplituce_scale_factor:float>`:  
+Manually set the amplitude scale factor of a specified channel. Channels are 0-3 and amplitude scale factors are a precentage of the maximum output voltage. If `debug` is set to on, it will respond with the actual frequency set. The Sweeper must be in manual mode.
 
 
 * `set`:  
