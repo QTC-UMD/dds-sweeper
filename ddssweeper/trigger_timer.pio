@@ -36,7 +36,7 @@ loop:
 .wrap
 
 hwstart:
-    wait 1 gpio 8   side 0      ; wait for the trigger pin
+    wait 1 pin 0   side 0      ; wait for the trigger pin
     jmp start       side 0
 
 
@@ -93,6 +93,7 @@ hwstart:
             (1u << trigger_pin)
         );
         sm_config_set_sideset_pins(&c, trigger_pin);
+        sm_config_set_in_pins(&c, trigger_pin);
 
         sm_config_set_out_shift(&c, true, false, 1);
         sm_config_set_in_shift(&c, true, true, 1);
