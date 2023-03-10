@@ -28,7 +28,7 @@ double get_ftw(ad9959_config* c, double freq, uint8_t* buf) {
         buf[i] = bytes[3 - i];
     }
 
-    // return the frequency that was ablt to be set
+    // return the frequency that was able to be set
     return ftw * sys_clk / 4294967296.l;
 }
 double get_pow(double phase, uint8_t* buf) {
