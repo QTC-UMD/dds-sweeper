@@ -237,7 +237,7 @@ void set_time(uint32_t addr, uint32_t time, int sweep_type, uint channels) {
 }
 
 bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate, double other1, double other2) {
-    uint8_t ins[30];
+    uint8_t ins[50];
 
     // for each step of buffered execution there is 1 byte of profile pin
     // instructions followed by the actual instruction for each channel
@@ -361,11 +361,11 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (type == AMP2_MODE) {
                 // set freq
-                ins[29] = 0x04;
-                get_ftw(&ad9959, other1, &ins[30]);
+                ins[28] = 0x04;
+                get_ftw(&ad9959, other1, &ins[29]);
 
-                ins[34] = 0x05;
-                get_pow(other2, &ins[35]);
+                ins[33] = 0x05;
+                get_pow(other2, &ins[34]);
             }
 
             // calculations: go from percentages to integers between 0 and 1024
@@ -451,11 +451,11 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (type == FREQ2_MODE) {
                 // set amp
-                ins[30] = 0x06;
-                get_asf(other1, &ins[31]);
+                ins[29] = 0x06;
+                get_asf(other1, &ins[30]);
 
-                ins[34] = 0x05;
-                get_pow(other2, &ins[35]);
+                ins[33] = 0x05;
+                get_pow(other2, &ins[34]);
             }
 
             uint8_t s0_word[4], e0_word[4], rate_word[4];
@@ -520,11 +520,11 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
 
             if (type == FREQ2_MODE) {
                 // set amp
-                ins[28] = 0x06;
-                get_ftw(&ad9959, other1, &ins[29]);
+                ins[27] = 0x06;
+                get_ftw(&ad9959, other1, &ins[28]);
 
-                ins[33] = 0x05;
-                get_asf(other2, &ins[31]);
+                ins[32] = 0x05;
+                get_asf(other2, &ins[33]);
             }
 
             // convert from degrees to tuning words
@@ -952,7 +952,7 @@ void loop() {
             // <end_point:double> <rate:double> <ramp-rate:int> <other1> <other2> (<time:int>)
             uint32_t channel, addr, ramp_rate, time;
             double start, end, rate, other1, other2;
-            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel, &addr, &start,
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u %lf %lf %u", &channel, &addr, &start,
                                 &end, &rate, &ramp_rate, &other1, &other2, &time);
 
             if (parsed > 1 && channel > 5) {
