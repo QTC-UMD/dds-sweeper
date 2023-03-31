@@ -63,6 +63,17 @@ static mutex_t wait_mutex;
 #define ABORTING 2
 int status = STOPPED;
 
+// modes
+#define UNDEF_MODE -1
+#define SS_MODE 0
+#define AMP_MODE 1
+#define FREQ_MODE 2
+#define PHASE_MODE 3
+#define AMP2_MODE 4
+#define FREQ2_MODE 5
+#define PHASE2_MODE 6
+
+
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 
@@ -204,7 +215,7 @@ void abort_run() {
 void set_time(uint32_t addr, uint32_t time, int sweep_type, uint channels) {
     uint32_t cycles = time;
 
-    if (sweep_type == 0) {
+    if (sweep_type == SS_MODE) {
         // single stepping
         if (cycles < WAITS_SS_BASE + WAITS_SS_PER * channels) {
             cycles = WAITS_SS_BASE + WAITS_SS_PER * channels;
@@ -225,8 +236,8 @@ void set_time(uint32_t addr, uint32_t time, int sweep_type, uint channels) {
     *((uint32_t *)(instructions + TIMING_OFFSET + 4 * addr)) = cycles;
 }
 
-bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate) {
-    uint8_t ins[30];
+bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double delta, uint rate, double other1, double other2) {
+    uint8_t ins[50];
 
     // for each step of buffered execution there is 1 byte of profile pin
     // instructions followed by the actual instruction for each channel
@@ -264,7 +275,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         ins[1] = (1u << (channel + 4)) | 0x02;
     }
 
-    if (type == 0) {
+    if (type == SS_MODE) {
         // SINGLE STEP
 
         // Memory Map (12 bytes)
@@ -328,7 +339,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             instructions[offset - 1] |= 1u << (3 - channel);
         }
 
-        if (type == 1) {
+        if (type == AMP_MODE || type == AMP2_MODE) {
             // AMP sweep
             // Memory Map
             // [ 0x00, CSR                              *Channel Select Register
@@ -337,7 +348,9 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             //   0x08, RDW3, RDW2, RDW1, RDW1,          *Rising Delta Word Register
             //   0x09, FDW3, FDW2, FDW1, FDW1,          *Falling Delta Word Register
             //   0x0a,  CW3,  CW2,  CW1,  CW0,          *Sweep Endpoint,
-            //   0x03, CFR3, CFR2, CFR1, CFR0           *Channel Function Register
+            //   0x03, CFR2, CFR1, CFR0                 *Channel Function Register
+            //  *0x04, FTW3, FTW2, FTW1, FTW0           *Frequency Tuning Word
+            //  *0x05, POW1, POW0                       *Phase Offset Word
             // ]
             ins[2] = 0x06;
             ins[6] = 0x07;
@@ -345,6 +358,15 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             ins[14] = 0x09;
             ins[19] = 0x0a;
             ins[24] = 0x03;
+
+            if (type == AMP2_MODE) {
+                // set freq
+                ins[28] = 0x04;
+                get_ftw(&ad9959, other1, &ins[29]);
+
+                ins[33] = 0x05;
+                get_pow(other2, &ins[34]);
+            }
 
             // calculations: go from percentages to integers between 0 and 1024
             s0 = round(s0 * 1024);
@@ -405,7 +427,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                     addr, channel, s0 / 10.23, e0 / 10.23, delta / 10.23, rate);
             }
 
-        } else if (type == 2) {
+        } else if (type == FREQ_MODE || type == FREQ2_MODE) {
             // FREQ Sweep
             // Memory Map
             // [ 0x00, CSR                        *Channel Select Register
@@ -414,7 +436,9 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             //   0x08, RDW3, RDW2, RDW1, RDW1,    *Rising Delta Word Register
             //   0x09, FDW3, FDW2, FDW1, FDW1,    *Falling Delta Word Register
             //   0x0a,  CW3,  CW2,  CW1,  CW0,    *Sweep Endpoint
-            //   0x03, CFR3, CFR2, CFR1, CFR0     *Channel Function Register
+            //   0x03, CFR2, CFR1, CFR0           *Channel Function Register
+            //  *0x06, ACR2, ACR1, ACR0,          *Amplitude Control Register
+            //  *0x05, POW1, POW0                 *Phase Offset Word
             // ]
             ins[2] = 0x04;
             ins[7] = 0x07;
@@ -424,6 +448,15 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             ins[15] = 0x09;
             ins[20] = 0x0a;
             ins[25] = 0x03;
+
+            if (type == FREQ2_MODE) {
+                // set amp
+                ins[29] = 0x06;
+                get_asf(other1, &ins[30]);
+
+                ins[33] = 0x05;
+                get_pow(other2, &ins[34]);
+            }
 
             uint8_t s0_word[4], e0_word[4], rate_word[4];
             double start_point, end_point, rampe_rate;
@@ -463,7 +496,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
                     addr, channel, start_point, end_point, rampe_rate, rate);
             }
 
-        } else if (type == 3) {
+        } else if (type == PHASE_MODE || type == PHASE2_MODE) {
             // PHASE Sweep
             // Memory Map
             // [ 0x00, CSR                          *Channel Select Register
@@ -472,7 +505,9 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             //   0x08, RDW3, RDW2, RDW1, RDW1,      *Rising Delta Word Register
             //   0x09, FDW3, FDW2, FDW1, FDW1,      *Falling Delta Word Register
             //   0x0a,  CW3,  CW2,  CW1,  CW0,      *Sweep Endpoint
-            //   0x03, CFR3, CFR2, CFR1, CFR0       *Channel Function Register
+            //   0x03, CFR2, CFR1, CFR0             *Channel Function Register
+            //  *0x04, FTW3, FTW2, FTW1, FTW0       *Frequency Tuning Word
+            //  *0x06, ACR2, ACR1, ACR0,            *Amplitude Control Register
             // ]
             ins[2] = 0x05;
             ins[5] = 0x07;
@@ -482,6 +517,15 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             ins[13] = 0x09;
             ins[18] = 0x0a;
             ins[23] = 0x03;
+
+            if (type == FREQ2_MODE) {
+                // set amp
+                ins[27] = 0x06;
+                get_ftw(&ad9959, other1, &ins[28]);
+
+                ins[32] = 0x05;
+                get_asf(other2, &ins[33]);
+            }
 
             // convert from degrees to tuning words
             s0 = round(s0 / 360.0 * 16384.0);
@@ -820,15 +864,15 @@ void loop() {
 
         if (parsed < 2) {
             printf("Missing Argument - expected: mode <type:int> <timing:int>\n");
-        } else if (type > 3) {
-            printf("Invalid Type - table type must be in range 0-3\n");
+        } else if (type > PHASE2_MODE) {
+            printf("Invalid Type - table type must be in range 0-6\n");
         } else {
-            uint8_t sizes[] = {14, 28, 29, 27};
+            uint8_t sizes[] = {14, 28, 29, 27, 36, 36, 36};
             INS_SIZE = sizes[type];
             ad9959.sweep_type = type;
             timing = _timing;
 
-            if (ad9959.sweep_type == 0) {
+            if (ad9959.sweep_type == SS_MODE) {
                 single_step_mode();
                 update();
             }
@@ -839,7 +883,7 @@ void loop() {
         // set <channel:int> <addr:int> <start_point:double> <end_point:double>
         // <rate:double> (<time:int>)
 
-        if (ad9959.sweep_type == 0) {
+        if (ad9959.sweep_type == SS_MODE) {
             // SINGLE TONE MODE
             uint32_t channel, addr, time;
             double freq, amp, phase;
@@ -862,19 +906,19 @@ void loop() {
                     "<frequency:double> <amplitude:double> <phase:double> "
                     "<time:int>\n");
             } else {
-                bool succsess = set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0);
+                bool succsess = set_ins(ad9959.sweep_type, channel, addr, freq, amp, phase, 0, 0, 0);
                 if (succsess && timing) {
                     set_time(addr, time, ad9959.sweep_type, ad9959.channels);
                 }
             }
 
             OK();
-        } else if (ad9959.sweep_type <= 3) {
+        } else if (ad9959.sweep_type <= PHASE_MODE) {
             // SWEEP MODE
             // set <channel:int> <addr:int> <start_point:double>
             // <end_point:double> <rate:double> <ramp-rate:int> (<time:int>)
             uint32_t channel, addr, ramp_rate, time;
-            double start, end, rate;
+            double start, end, rate, other1, other2;
             int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u %u", &channel, &addr, &start,
                                 &end, &rate, &ramp_rate, &time);
 
@@ -895,7 +939,40 @@ void loop() {
                     "<start_point:double> <end_point:double> <delta:double> "
                     "<rate:int> <time:int>\n");
             } else {
-                bool succsess = set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate);
+                bool succsess = set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate, 0, 0);
+                if (succsess && timing) {
+                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                }
+            }
+
+            OK();
+        } else if (ad9959.sweep_type <= PHASE2_MODE) {
+            // SWEEP2 MODE
+            // set <channel:int> <addr:int> <start_point:double>
+            // <end_point:double> <rate:double> <ramp-rate:int> <other1> <other2> (<time:int>)
+            uint32_t channel, addr, ramp_rate, time;
+            double start, end, rate, other1, other2;
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u %lf %lf %u", &channel, &addr, &start,
+                                &end, &rate, &ramp_rate, &other1, &other2, &time);
+
+            if (parsed > 1 && channel > 5) {
+                printf(
+                    "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
+                    "instrcution\n");
+            } else if (channel > 3 && parsed < 2) {
+                printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+            } else if (parsed < 8 && channel < 4) {
+                printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
+                    "<start_point:double> <end_point:double> <delta:double> "
+                    "<rate:int> <other1> <other2> (<time:int>)\n");
+            } else if (timing && parsed < 9 && channel < 4) {
+                printf(
+                    "No Time Given - expected: set <channel:int> <addr:int> "
+                    "<start_point:double> <end_point:double> <delta:double> "
+                    "<rate:int> <other1> <other2> <time:int>\n");
+            } else {
+                bool succsess = set_ins(ad9959.sweep_type, channel, addr, start, end, rate, ramp_rate, other1, other2);
                 if (succsess && timing) {
                     set_time(addr, time, ad9959.sweep_type, ad9959.channels);
                 }
@@ -908,7 +985,7 @@ void loop() {
                 "instructions can be set\n");
         }
     } else if (strncmp(readstring, "start", 5) == 0) {
-        if (ad9959.sweep_type == -1) {
+        if (ad9959.sweep_type == UNDEF_MODE) {
             printf(
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");
@@ -921,7 +998,7 @@ void loop() {
             OK();
         }
     } else if (strncmp(readstring, "hwstart", 7) == 0) {
-        if (ad9959.sweep_type == -1) {
+        if (ad9959.sweep_type == UNDEF_MODE) {
             printf(
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");

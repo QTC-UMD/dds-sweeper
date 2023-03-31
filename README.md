@@ -158,6 +158,18 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
         `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but they will be rounded to the nearest multiple of the frequency resolution.
       - Phase Sweeps (mode 3)
         `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
+
+  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <ramp-rate:int> <secondary1:double> <secondary2:double> (<time:int>)`
+
+    These modes perform a linear sweep on one of the parameters, while simulaneously single stepping on the other two parameters.
+      - Amplitude Sweeps (mode 4)  
+        `secondary1` is the frequency, and `secondary2` is the phase offset.
+      - Frequency Sweeps (mode 5)  
+        `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
+      - Phase Sweeps (mode 6)  
+        `secondary1` is the amplitude scale factor, and `secondary2` is the frequency.
+        
+
   
 
 
