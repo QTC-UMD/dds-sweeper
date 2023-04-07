@@ -184,6 +184,8 @@ void reset() {
     ad9959.sweep_type = 1;
     ad9959.channels = 1;
 
+    set_pll_mult(&ad9959, ad9959.pll_mult);
+
     clear();
     update();
 }
