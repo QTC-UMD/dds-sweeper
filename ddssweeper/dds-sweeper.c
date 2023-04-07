@@ -42,6 +42,7 @@
 #define PIN_SYNC 10
 #define PIN_CLOCK 21
 #define PIN_UPDATE 22
+#define PIN_RESET 9
 #define P0 19
 #define P1 18
 #define P2 17
@@ -180,6 +181,11 @@ void sync() {
 }
 
 void reset() {
+    gpio_put(PIN_RESET, 1);
+    sleep_ms(1);
+    gpio_put(PIN_RESET, 0);
+    sleep_ms(1);
+
     sync();
     ad9959.sweep_type = 1;
     ad9959.channels = 1;
@@ -1066,6 +1072,7 @@ int main() {
 
     // put AD9959 in default state
     init_pin(PIN_SYNC);
+    init_pin(PIN_RESET);
     set_ref_clk(&ad9959, 125 * MHZ);
     set_pll_mult(&ad9959, 4);
     reset();
