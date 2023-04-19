@@ -74,11 +74,12 @@ hwstart:
         sm_config_set_in_shift(&c, true, true, 1);
 
         sm_config_set_clkdiv(&c, 1.f);
+ 
+        hw_set_bits(&pio->input_sync_bypass, 1u << trigger_pin);
 
         pio_sm_init(pio, sm, offset, &c);
 
         pio_sm_set_enabled(pio, sm, true);
- 
     }
 
     static inline void timer_program_init(PIO pio, uint sm, uint offset,
@@ -102,6 +103,7 @@ hwstart:
 
         pio_sm_init(pio, sm, offset, &c);
         pio_sm_set_enabled(pio, sm, true);
+
 
     }
 
