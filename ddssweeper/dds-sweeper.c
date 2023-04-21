@@ -189,6 +189,7 @@ void reset() {
     sync();
     ad9959.sweep_type = 1;
     ad9959.channels = 1;
+    INS_SIZE = 14;
 
     set_pll_mult(&ad9959, ad9959.pll_mult);
 
@@ -632,6 +633,7 @@ void background() {
         // sync just to be sure
         sync();
 
+        // if this is hwstart, stell the timer pio core and it will handle that on its own
         if (hwstart) {
             pio_sm_put(PIO_TIME, 0, 0);
         }
