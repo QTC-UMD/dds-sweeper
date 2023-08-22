@@ -6,10 +6,10 @@ build/ddssweeper/*
 
 .vscode/
 
-# board gerber files
-dds-sweeper-board/*
-!dds-sweeper-board/gerbers/*
-!dds-sweeper-board/*.zip
+# kicad extras
+fp-info-cache
+dds-sweeper-board/*-backups/*
+*.lck
 
 # ignore jupyter nb files
 testing/.ipynb_checkpoints/*
