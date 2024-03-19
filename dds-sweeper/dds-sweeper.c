@@ -78,7 +78,7 @@ int status = STOPPED;
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 
-#define MAX_SIZE 249856
+#define MAX_SIZE 245760
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
