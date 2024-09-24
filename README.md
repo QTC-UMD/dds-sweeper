@@ -1,6 +1,12 @@
 # dds-sweeper
 Raspberry Pi Pico interface for the AD9959 DDS.
 
+If you use this project, please cite as:
+
+E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using internal sweeps of a direct digital synthesizer,
+*Review of Scientific Instruments*, **94**, 094705 (2023)
+[https://doi.org/10.1063/5.0163342](https://doi.org/10.1063/5.0163342)
+
 
 ## Specs
 

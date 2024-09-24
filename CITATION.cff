@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using the preferred article citation.
+title: dds-sweeper
+abstract: >-
+  Raspberry Pi Pico interface for the AD9959 DDS
+authors:
+  - family-names: Huegler
+    given-names: Ethan
+    orcid: 'https://orcid.org/0000-0001-5075-970X'
+  - family-names: Hill
+    given-names: Joshua C
+    orcid: 'https://orcid.org/0000-0002-4978-5393'
+  - family-names: Meyer
+    given-names: David H
+    orcid: 'https://orcid.org/0000-0003-2452-2017'
+
+version: 0.1.1
+date-released: "2023-02-01"
+license: BSD
+repository-code: "https://github.com/QTC-UMD/dds-sweeper"
+url: "https://doi.org/10.1063/5.0163342"
+
+identifiers:
+  - description: Journal article describing the software
+    doi: 10.1063/5.0163342
+
+preferred-citation:
+  type: article
+  title: "An agile radio-frequency source using internal linear sweeps of a direct digital synthesizer"
+  authors:
+    - family-names: Huegler
+      given-names: Ethan
+      orcid: 'https://orcid.org/0000-0001-5075-970X'
+    - family-names: Hill
+      given-names: Joshua C
+      orcid: 'https://orcid.org/0000-0002-4978-5393'
+    - family-names: Meyer
+      given-names: David H
+      orcid: 'https://orcid.org/0000-0003-2452-2017'
+  doi: "10.1063/5.0163342"
+  journal: "Review of Scientific Instruments"
+  month: 9
+  year: 2023
+  start: 94705 # page number
+  issue: 94
+
+references:
+  - type: software
+    title: PrawnBlaster
+    authors:
+      - family-names: Starkey
+        given-names: Philip
+    repository-code: "https://github.com/labscript-suite/PrawnBlaster"
+    
