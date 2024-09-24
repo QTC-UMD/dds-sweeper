@@ -1,0 +1,39 @@
+name: Build firmware
+
+on:
+  push:
+    tags:
+      - '[0-9]+\.[0-9]+\.[0-9]+*'
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    name: Build firmware
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker compose build --pull --build-arg APT_MIRROR="http://azure.archive.ubuntu.com/ubuntu/"
+
+      - name: Run docker container
+        run: docker compose up
+
+      - name: Upload firmware as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dds-sweeper-firmware-${{ github.sha }}
+          path: build/dds-sweeper/*.uf2
+
+      - name: Create release
+        if: (github.event_name == 'push' && contains(github.ref, '/tags'))
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          files: |
+            LICENSE
+            build/dds-sweeper/dds-sweeper.uf2

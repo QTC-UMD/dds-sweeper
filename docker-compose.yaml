@@ -1,0 +1,11 @@
+name: dds-sweeper
+
+services:
+  buildfirmware:
+    build:
+      dockerfile: docker/Dockerfile
+    command: /bin/bash -c 'cmake .. && make'
+    volumes:
+      - .:/dds-sweeper
+    working_dir: /dds-sweeper/build
+    init: true

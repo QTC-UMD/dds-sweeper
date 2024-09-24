@@ -38,7 +38,7 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 | Sweep Mode (Ext Timer)      | 8327      | 4234      | 2838      | 2135      |
 
 ## How to flash the firmware
-Download the latest [dds-sweeper.uf2 file](https://github.com/naqslab/dds-sweeper/blob/main/build/ddssweeper/dds-sweeper.uf2).
+Download the latest [dds-sweeper.uf2 file](https://github.com/QTC-UMD/dds-sweeper/releases/latest/download/dds-sweeper.uf2).
 On your Raspberry Pi Pico, hold down the "bootsel" button while plugging the Pico into USB port on a PC (that must already be turned on).
 The Pico should mount as a mass storage device (if it doesn't, try again or consult the Pico documentation).
 Drag and drop the `.uf2` file into the mounted mass storage device.
@@ -205,4 +205,22 @@ Saves the buffered execution table to nonvolatile memory so that it can be recov
 Retrieves the buffered execution table stored in nonvolatile memory and restores it to system memory so that it can be run. A saved table must be loaded before it can be run.
 
 
+## Compiling the firmware
 
+If you want to make changes to the firmware, or want to compile it yourself (because you don't trust binary blobs from the internet), we provide a docker configuration to help you do that.
+
+1. Install docker desktop and make sure it is running (if you are on Windows, you may have to mess around a bit to get virtualisation working at an operating system level)
+2. Clone this repository
+3. Open a terminal with the current working directory set to the repository root (the `docker-compose.yaml`` file should be there)
+4. Run `docker compose build --pull` to build the docker container
+5. Run `docker compose up` to build the PrawnBlaster firmware.
+
+Step 4 will take a while as it has to build the docker container.
+If it is slow to download packages from the Ubuntu package repositories, consider providing an explicit apt mirror that is fast for you: `docker compose build --pull --build-arg APT_MIRROR="http://azure.archive.ubuntu.com/ubuntu/"`.
+
+If you want to change which version of the pico SDK it builds against, this is set in the `build/docker/Dockerfile` file.
+Just change the git tag of the pico SDK that gets cloned out by git, then rebuild the docker container (see step 4).
+
+Note once the docker container is built, you can run step 5 as many times as you like.
+You do not need to rebuild the container, even if you make changes to the PrawnBlaster source code.
+You only need to rebuild the docker container if you modify the `build/docker/Dockerfile` file.
