@@ -856,7 +856,7 @@ void loop() {
         // mode <type:int> <timing:int>
 
         uint type, _timing;
-        int parsed = sscanf(readstring, "%*s %u %u %u", &type, &_timing);
+        int parsed = sscanf(readstring, "%*s %u %u", &type, &_timing);
 
         if (parsed < 2) {
             fast_serial_printf("Missing Argument - expected: mode <type:int> <timing:int>\n");
