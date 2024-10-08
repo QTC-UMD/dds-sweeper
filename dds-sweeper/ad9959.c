@@ -1,4 +1,5 @@
 #include "ad9959.h"
+#include "fast_serial.h"
 
 // =============================================================================
 // calculate tuning words
@@ -74,44 +75,44 @@ void read_all() {
     uint8_t resp[20];
 
     read_reg(0x00, 1, resp);
-    printf(" CSR: %02x\n", resp[0]);
+    fast_serial_printf(" CSR: %02x\n", resp[0]);
 
     read_reg(0x01, 3, resp);
-    printf(" FR1: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+    fast_serial_printf(" FR1: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
     read_reg(0x02, 2, resp);
-    printf(" FR2: %02x %02x\n", resp[0], resp[1]);
+    fast_serial_printf(" FR2: %02x %02x\n", resp[0], resp[1]);
 
     for (int i = 0; i < 4; i++) {
-        printf("CHANNEL %d:\n", i);
+        fast_serial_printf("CHANNEL %d:\n", i);
 
         uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x02};
 
         spi_write_blocking(spi1, csr, 2);
 
         read_reg(0x03, 3, resp);
-        printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+        fast_serial_printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
         read_reg(0x04, 4, resp);
-        printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+        fast_serial_printf("CFTW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
 
         read_reg(0x05, 2, resp);
-        printf("CPOW: %02x %02x\n", resp[0], resp[1]);
+        fast_serial_printf("CPOW: %02x %02x\n", resp[0], resp[1]);
 
         read_reg(0x06, 3, resp);
-        printf(" ACR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+        fast_serial_printf(" ACR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 
         read_reg(0x07, 2, resp);
-        printf("LSRR: %02x %02x\n", resp[0], resp[1]);
+        fast_serial_printf("LSRR: %02x %02x\n", resp[0], resp[1]);
 
         read_reg(0x08, 4, resp);
-        printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+        fast_serial_printf(" RDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
 
         read_reg(0x09, 4, resp);
-        printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+        fast_serial_printf(" FDW: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
 
         read_reg(0x0a, 4, resp);
-        printf(" CW1: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
+        fast_serial_printf(" CW1: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
     }
     spi_set_baudrate(spi1, 100 * MHZ);
 }
@@ -131,7 +132,7 @@ void set_pll_mult(ad9959_config* c, uint mult) {
     spi_write_blocking(spi1, fr1, 4);
 
     // for (int i = 0; i < 4; i++) {
-    //     printf("%02x\n", fr1[i]);
+    //     fast_serial_printf("%02x\n", fr1[i]);
     // }
 }
 

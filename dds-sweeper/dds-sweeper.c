@@ -20,8 +20,9 @@
 #######################################################################
 */
 
-#include <stdio.h>
 #include <string.h>
+
+#include "fast_serial.h"
 
 #include "ad9959.h"
 #include "hardware/clocks.h"
@@ -33,7 +34,7 @@
 #include "pico/stdlib.h"
 #include "trigger_timer.pio.h"
 
-#define VERSION "0.1.1"
+#define VERSION "0.2.0"
 
 // Default Pins to use
 #define PIN_MISO 12
@@ -89,7 +90,7 @@ int status = STOPPED;
 #define WAITS_SW_BASE (1000 - WAITS_SW_PER)
 
 // For responding OK to successful commands
-#define OK() printf("ok\n")
+#define OK() fast_serial_printf("ok\n")
 
 // =============================================================================
 // global variables
@@ -147,28 +148,14 @@ void measure_freqs(void) {
     uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
     uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
 
-    printf("pll_sys = %dkHz\n", f_pll_sys);
-    printf("pll_usb = %dkHz\n", f_pll_usb);
-    printf("rosc = %dkHz\n", f_rosc);
-    printf("clk_sys = %dkHz\n", f_clk_sys);
-    printf("clk_peri = %dkHz\n", f_clk_peri);
-    printf("clk_usb = %dkHz\n", f_clk_usb);
-    printf("clk_adc = %dkHz\n", f_clk_adc);
-    printf("clk_rtc = %dkHz\n", f_clk_rtc);
-}
-
-void readline() {
-    int i = 0;
-    char c;
-    while (true) {
-        c = getchar();
-        if (c == '\n') {
-            readstring[i] = '\0';
-            return;
-        } else {
-            readstring[i++] = c;
-        }
-    }
+    fast_serial_printf("pll_sys = %dkHz\n", f_pll_sys);
+    fast_serial_printf("pll_usb = %dkHz\n", f_pll_usb);
+    fast_serial_printf("rosc = %dkHz\n", f_rosc);
+    fast_serial_printf("clk_sys = %dkHz\n", f_clk_sys);
+    fast_serial_printf("clk_peri = %dkHz\n", f_clk_peri);
+    fast_serial_printf("clk_usb = %dkHz\n", f_clk_usb);
+    fast_serial_printf("clk_adc = %dkHz\n", f_clk_adc);
+    fast_serial_printf("clk_rtc = %dkHz\n", f_clk_rtc);
 }
 
 void update() { pio_sm_put(PIO_TRIG, 0, UPDATE); }
@@ -260,7 +247,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
     // check there is enough space for this instruction
     uint tspace = timing ? TIMERS * 4 : 0;
     if (offset + channel_offset + INS_SIZE + tspace >= MAX_SIZE || (timing && addr > TIMERS)) {
-        printf("Invalid Address\n");
+        fast_serial_printf("Invalid Address\n");
         return false;
     }
 
@@ -315,7 +302,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
         memcpy(ins + 11, (uint8_t *)&asf, 3);
 
         if (DEBUG) {
-            printf(
+            fast_serial_printf(
                 "Set ins #%d for channel %d with amp: %3lf %% freq: %3lf Hz phase: %3lf "
                 "deg\n",
                 addr, channel, amp, freq, phase);
@@ -430,7 +417,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             memcpy(ins + 25, "\x40\x43\x10", 3);
 
             if (DEBUG) {
-                printf(
+                fast_serial_printf(
                     "Set ins #%d for channel %d from %3lf%% to %3lf%% with delta %3lf%% "
                     "and rate of %d\n",
                     addr, channel, s0 / 10.23, e0 / 10.23, delta / 10.23, rate);
@@ -499,7 +486,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             memcpy(ins + 21, higher, 4);
 
             if (DEBUG) {
-                printf(
+                fast_serial_printf(
                     "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with delta %4lf "
                     "Hz and rate of %d\n",
                     addr, channel, start_point, end_point, rampe_rate, rate);
@@ -578,7 +565,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
             memcpy(ins + 24, "\xc0\x43\x10", 3);
 
             if (DEBUG) {
-                printf(
+                fast_serial_printf(
                     "Set ins #%d for channel %d from %4lf deg to %4lf deg with delta "
                     "%4lf deg and rate of %d\n",
                     addr, channel, s0 / 16384.0 * 360, e0 / 16384.0 * 360, delta / 16384.0 * 360,
@@ -678,13 +665,13 @@ void background() {
 // =============================================================================
 
 void loop() {
-    readline();
+    fast_serial_read_until(readstring, 256, '\n');
     int local_status = get_status();
 
     if (strncmp(readstring, "version", 7) == 0) {
-        printf("%s\n", VERSION);
+        fast_serial_printf("%s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
-        printf("%d\n", local_status);
+        fast_serial_printf("%d\n", local_status);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
         DEBUG = 1;
         OK();
@@ -694,7 +681,7 @@ void loop() {
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
     } else if (strncmp(readstring, "numtriggers", 11) == 0) {
-        printf("%u\n", triggers);
+        fast_serial_printf("%u\n", triggers);
     } else if (strncmp(readstring, "reset", 5) == 0) {
         abort_run();
         reset();
@@ -708,7 +695,7 @@ void loop() {
     // Stuff that cannot be done while the table is running
     // ====================================================
     else if (local_status != STOPPED) {
-        printf(
+        fast_serial_printf(
             "Cannot execute command \"%s\" during buffered execution. Check "
             "status first and wait for it to return %d (stopped or aborted).\n",
             readstring, STOPPED);
@@ -738,9 +725,9 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u", &channels);
 
         if (parsed < 1) {
-            printf("Missing Argument - expected: setchannels <num:int>\n");
+            fast_serial_printf("Missing Argument - expected: setchannels <num:int>\n");
         } else if (channels < 1 || channels > 4) {
-            printf("Invalid Channels - expected: num must be in range 0-3\n");
+            fast_serial_printf("Invalid Channels - expected: num must be in range 0-3\n");
         } else {
             ad9959.channels = channels;
             OK();
@@ -752,11 +739,11 @@ void loop() {
         double freq;
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &freq);
         if (parsed < 2) {
-            printf(
+            fast_serial_printf(
                 "Missing Argument - too few arguments - expected: setfreq "
                 "<channel:int> <frequency:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Channel - num must be in range 0-3\n");
+            fast_serial_printf("Invalid Channel - num must be in range 0-3\n");
         } else {
             uint8_t ftw[4];
             freq = get_ftw(&ad9959, freq, ftw);
@@ -764,7 +751,7 @@ void loop() {
             update();
 
             if (DEBUG) {
-                printf("set freq: %lf\n", freq);
+                fast_serial_printf("set freq: %lf\n", freq);
             }
 
             OK();
@@ -776,11 +763,11 @@ void loop() {
         double phase;
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &phase);
         if (parsed < 2) {
-            printf(
+            fast_serial_printf(
                 "Missing Argument - too few arguments - expected: setphase "
                 "<channel:int> <frequency:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Channel - channel must be in range 0-3\n");
+            fast_serial_printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
             uint8_t pow[2];
             phase = get_pow(phase, pow);
@@ -788,7 +775,7 @@ void loop() {
             update();
 
             if (DEBUG) {
-                printf("Phase: %12lf\n", phase);
+                fast_serial_printf("Phase: %12lf\n", phase);
             }
 
             OK();
@@ -800,11 +787,11 @@ void loop() {
         double amp;
         int parsed = sscanf(readstring, "%*s %u %lf", &channel, &amp);
         if (parsed < 2) {
-            printf(
+            fast_serial_printf(
                 "Missing Argument - expected: setamp <channel:int> "
                 "<amp:double>\n");
         } else if (channel < 0 || channel > 3) {
-            printf("Invalid Channel - channel must be in range 0-3\n");
+            fast_serial_printf("Invalid Channel - channel must be in range 0-3\n");
         } else {
             uint8_t asf[3];
             amp = get_asf(amp, asf);
@@ -812,7 +799,7 @@ void loop() {
             update();
 
             if (DEBUG) {
-                printf("Amp: %12lf\n", amp);
+                fast_serial_printf("Amp: %12lf\n", amp);
             }
 
             OK();
@@ -823,9 +810,9 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %u", &mult);
 
         if (parsed < 1) {
-            printf("Missing Argument - expected: setmult <pll_mult:int>\n");
+            fast_serial_printf("Missing Argument - expected: setmult <pll_mult:int>\n");
         } else if (mult != 1 || !(mult >= 4 && mult <= 20)) {
-            printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
+            fast_serial_printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
 
         } else {
             // could do more validation to make sure it is a valid
@@ -840,10 +827,10 @@ void loop() {
         uint freq;  // in Hz (up to 133 MHz)
         int parsed = sscanf(readstring, "%*s %u %u", &src, &freq);
         if (parsed < 2) {
-            printf("Missing Argument - expected: setclock <mode:int> <freq:int>\n");
+            fast_serial_printf("Missing Argument - expected: setclock <mode:int> <freq:int>\n");
         } else {
             if (src > 1) {
-                printf("Invalid Mode - mode must be in range 0-1\n");
+                fast_serial_printf("Invalid Mode - mode must be in range 0-1\n");
             } else {
                 // Set new clock frequency
                 if (src == 0) {
@@ -853,15 +840,14 @@ void loop() {
                                         CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                                         125 * MHZ);
                         clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
-                        stdio_init_all();
                         OK();
                     } else {
-                        printf("Failure. Cannot exactly achieve that clock frequency.");
+                        fast_serial_printf("Failure. Cannot exactly achieve that clock frequency.\n");
                     }
                 } else {
                     set_ref_clk(&ad9959, freq);
                     gpio_deinit(PIN_CLOCK);
-                    if (DEBUG) printf("AD9959 requires external reference clock\n");
+                    if (DEBUG) fast_serial_printf("AD9959 requires external reference clock\n");
                     OK();
                 }
             }
@@ -870,12 +856,12 @@ void loop() {
         // mode <type:int> <timing:int>
 
         uint type, _timing;
-        int parsed = sscanf(readstring, "%*s %u %u %u", &type, &_timing);
+        int parsed = sscanf(readstring, "%*s %u %u", &type, &_timing);
 
         if (parsed < 2) {
-            printf("Missing Argument - expected: mode <type:int> <timing:int>\n");
+            fast_serial_printf("Missing Argument - expected: mode <type:int> <timing:int>\n");
         } else if (type > PHASE2_MODE) {
-            printf("Invalid Type - table type must be in range 0-6\n");
+            fast_serial_printf("Invalid Type - table type must be in range 0-6\n");
         } else {
             uint8_t sizes[] = {14, 28, 29, 27, 36, 36, 36};
             INS_SIZE = sizes[type];
@@ -901,17 +887,17 @@ void loop() {
                                 &amp, &phase, &time);
 
             if (parsed > 1 && channel > 5) {
-                printf(
+                fast_serial_printf(
                     "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
                     "instrcution\n");
             } else if (channel > 3 && parsed < 2) {
-                printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+                fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
             } else if (!timing && parsed < 5 && channel < 4) {
-                printf(
+                fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> <frequency:double> "
                     "<amplitude:double> <phase:double> (<time:int>)\n");
             } else if (timing && parsed < 6 && channel < 4) {
-                printf(
+                fast_serial_printf(
                     "No Time Given - expected: set <channel:int> <addr:int> "
                     "<frequency:double> <amplitude:double> <phase:double> "
                     "<time:int>\n");
@@ -933,18 +919,18 @@ void loop() {
                                 &end, &rate, &ramp_rate, &time);
 
             if (parsed > 1 && channel > 5) {
-                printf(
+                fast_serial_printf(
                     "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
                     "instrcution\n");
             } else if (channel > 3 && parsed < 2) {
-                printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+                fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
             } else if (parsed < 6 && channel < 4) {
-                printf(
+                fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <delta:double> "
                     "<rate:int> (<time:int>)\n");
             } else if (timing && parsed < 7 && channel < 4) {
-                printf(
+                fast_serial_printf(
                     "No Time Given - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <delta:double> "
                     "<rate:int> <time:int>\n");
@@ -966,18 +952,18 @@ void loop() {
                                 &end, &rate, &ramp_rate, &other1, &other2, &time);
 
             if (parsed > 1 && channel > 5) {
-                printf(
+                fast_serial_printf(
                     "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
                     "instrcution\n");
             } else if (channel > 3 && parsed < 2) {
-                printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+                fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
             } else if (parsed < 8 && channel < 4) {
-                printf(
+                fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <delta:double> "
                     "<rate:int> <other1> <other2> (<time:int>)\n");
             } else if (timing && parsed < 9 && channel < 4) {
-                printf(
+                fast_serial_printf(
                     "No Time Given - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <delta:double> "
                     "<rate:int> <other1> <other2> <time:int>\n");
@@ -990,13 +976,13 @@ void loop() {
 
             OK();
         } else {
-            printf(
+            fast_serial_printf(
                 "Invalid Command - \'mode\' must be defined before "
                 "instructions can be set\n");
         }
     } else if (strncmp(readstring, "start", 5) == 0) {
         if (ad9959.sweep_type == UNDEF_MODE) {
-            printf(
+            fast_serial_printf(
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");
         } else {
@@ -1009,7 +995,7 @@ void loop() {
         }
     } else if (strncmp(readstring, "hwstart", 7) == 0) {
         if (ad9959.sweep_type == UNDEF_MODE) {
-            printf(
+            fast_serial_printf(
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");
         } else {
@@ -1021,7 +1007,7 @@ void loop() {
             OK();
         }
     } else {
-        printf("Unrecognized Command: \"%s\"\n", readstring);
+        fast_serial_printf("Unrecognized Command: \"%s\"\n", readstring);
     }
 }
 
@@ -1033,7 +1019,7 @@ int main() {
     init_pin(PICO_DEFAULT_LED_PIN);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
-    stdio_init_all();
+    fast_serial_init();
 
     set_sys_clock_khz(125 * MHZ / 1000, false);
 
