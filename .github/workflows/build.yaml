@@ -28,8 +28,21 @@ jobs:
           name: dds-sweeper-firmware-${{ github.sha }}
           path: build/dds-sweeper/*.uf2
 
+  github-release:
+    name: Github Release
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'push' && contains(github.ref, '/tags') && github.repository_owner == 'QTC-UMD')
+    needs: [build-firmware]
+    permissions:
+      packages: read
+      contents: write
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dds-sweeper-firmware-${{ github.sha }}
+          path: build/dds-sweeper/*.uf2
       - name: Create release
-        if: (github.event_name == 'push' && contains(github.ref, '/tags'))
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
