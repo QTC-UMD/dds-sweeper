@@ -34,7 +34,7 @@
 #include "pico/stdlib.h"
 #include "trigger_timer.pio.h"
 
-#define VERSION "0.2.0"
+#define VERSION "0.2.1"
 
 // Default Pins to use
 #define PIN_MISO 12
