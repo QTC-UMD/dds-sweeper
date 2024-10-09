@@ -811,9 +811,8 @@ void loop() {
 
         if (parsed < 1) {
             fast_serial_printf("Missing Argument - expected: setmult <pll_mult:int>\n");
-        } else if (mult != 1 || !(mult >= 4 && mult <= 20)) {
+        } else if (mult != 1 && !(mult >= 4 && mult <= 20)) {
             fast_serial_printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
-
         } else {
             // could do more validation to make sure it is a valid
             // multiply/system clock freq
