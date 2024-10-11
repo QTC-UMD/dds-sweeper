@@ -370,6 +370,7 @@
   (pad "31" smd rect (at 8.89 -1.27) (size 3.5 1.7) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp 68902250-b067-4aef-b047-2576028252ac))
   (pad "32" smd rect (at 8.89 -3.81) (size 3.5 1.7) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp 21edfc27-fee2-4278-9a84-60b2d4ac3542))
   (pad "33" smd rect (at 8.89 -6.35) (size 0.001 0.001) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp cbfbbbc7-719e-4676-a55b-08ae64b80c9c))
+  (pad "33" smd rect (at 8.89 -6.35) (size 3.5 1.7) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp 0d680387-dc84-4ea0-bbc7-e10cf6af01e3))
   (pad "34" smd rect (at 8.89 -8.89) (size 3.5 1.7) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp f49a2fef-74b7-41a3-b223-94393bfce93c))
   (pad "35" smd rect (at 8.89 -11.43) (size 3.5 1.7) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp 6b5ba2f4-013a-4714-9709-2dc437c63f6a))
   (pad "36" smd rect (at 8.89 -13.97) (size 3.5 1.7) (drill (offset 0.9 0)) (layers "F.Cu" "F.Mask") (tstamp 5b8fad4b-e0bc-4e41-871c-622e253f6a4d))
