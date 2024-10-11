@@ -26,7 +26,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dds-sweeper-firmware-${{ github.sha }}
-          path: build/dds-sweeper/*.uf2
+          path: |
+            build/dds-sweeper/*.uf2
+            LICENSE
 
   github-release:
     name: Github Release
@@ -41,12 +43,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dds-sweeper-firmware-${{ github.sha }}
-          path: build/dds-sweeper/*.uf2
       - name: Create release
-        uses: "marvinpinto/action-automatic-releases@latest"
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
           files: |
             LICENSE
-            build/dds-sweeper/dds-sweeper.uf2
+            dds-sweeper.uf2
