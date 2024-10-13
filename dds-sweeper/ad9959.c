@@ -49,14 +49,14 @@ double get_pow(double phase, uint8_t* buf) {
 // =============================================================================
 void send_channel(uint8_t reg, uint8_t channel, uint8_t* buf, size_t len) {
     uint8_t csr[] = {0x00, 0x02 | (1u << (channel + 4))};
-    spi_write_blocking(spi1, csr, 2);
-    spi_write_blocking(spi1, &reg, 1);
-    spi_write_blocking(spi1, buf, len);
+    spi_write_blocking(SPI, csr, 2);
+    spi_write_blocking(SPI, &reg, 1);
+    spi_write_blocking(SPI, buf, len);
 }
 
 void send(uint8_t reg, uint8_t* buf, size_t len) {
-    spi_write_blocking(spi1, &reg, 1);
-    spi_write_blocking(spi1, buf, len);
+    spi_write_blocking(SPI, &reg, 1);
+    spi_write_blocking(SPI, buf, len);
 }
 
 // =============================================================================
@@ -65,12 +65,12 @@ void send(uint8_t reg, uint8_t* buf, size_t len) {
 
 void read_reg(uint8_t reg, size_t len, uint8_t* buf) {
     reg |= 0x80;
-    spi_write_blocking(spi1, &reg, 1);
-    spi_read_blocking(spi1, 0, buf, len);
+    spi_write_blocking(SPI, &reg, 1);
+    spi_read_blocking(SPI, 0, buf, len);
 }
 
 void read_all() {
-    spi_set_baudrate(spi1, 1 * MHZ);
+    spi_set_baudrate(SPI, 1 * MHZ);
 
     uint8_t resp[20];
 
@@ -88,7 +88,7 @@ void read_all() {
 
         uint8_t csr[] = {0x00, (1u << (i + 4)) | 0x02};
 
-        spi_write_blocking(spi1, csr, 2);
+        spi_write_blocking(SPI, csr, 2);
 
         read_reg(0x03, 3, resp);
         fast_serial_printf(" CFR: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
@@ -114,7 +114,7 @@ void read_all() {
         read_reg(0x0a, 4, resp);
         fast_serial_printf(" CW1: %02x %02x %02x %02x\n", resp[0], resp[1], resp[2], resp[3]);
     }
-    spi_set_baudrate(spi1, 100 * MHZ);
+    spi_set_baudrate(SPI, 100 * MHZ);
 }
 
 // =============================================================================
@@ -129,7 +129,7 @@ void set_pll_mult(ad9959_config* c, uint mult) {
     }
 
     uint8_t fr1[] = {0x01, vco | (mult << 2), 0x00, 0x00};
-    spi_write_blocking(spi1, fr1, 4);
+    spi_write_blocking(SPI, fr1, 4);
 
     // for (int i = 0; i < 4; i++) {
     //     fast_serial_printf("%02x\n", fr1[i]);
@@ -151,5 +151,5 @@ void clear() {
                        0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00,
                        0x02, 0x00, 0x00};
 
-    spi_write_blocking(spi1, clear, sizeof clear);
+    spi_write_blocking(SPI, clear, sizeof clear);
 }
