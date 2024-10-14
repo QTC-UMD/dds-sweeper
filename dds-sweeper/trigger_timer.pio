@@ -92,7 +92,7 @@ hwstart:
         pio_gpio_init(pio, trigger_pin);
         pio_gpio_init(pio, int_trigger_pin);
         pio_sm_set_pindirs_with_mask(pio, sm, 
-                                     (1u << trigger_pin) | (1u << int_trigger_pin),
+                                     (0u << trigger_pin) | (1u << int_trigger_pin),
                                      (1u << trigger_pin) | (1u << int_trigger_pin)
         );
         sm_config_set_sideset_pins(&c, int_trigger_pin);

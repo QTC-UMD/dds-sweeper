@@ -885,6 +885,9 @@ void loop() {
                 update();
             }
 
+            // Re-initialize PIO in case timing has changed.
+            init_pio();
+
             OK();
         }
     } else if (strncmp(readstring, "set ", 4) == 0) {
