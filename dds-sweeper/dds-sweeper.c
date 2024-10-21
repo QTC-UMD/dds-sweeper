@@ -49,6 +49,7 @@
 #define P2 17
 #define P3 16
 #define TRIGGER 8
+#define INT_TRIGGER 7
 
 #define PIO_TRIG pio0
 #define PIO_TIME pio1
@@ -119,9 +120,13 @@ void init_pin(uint pin) {
 
 void init_pio() {
     uint offset = pio_add_program(PIO_TRIG, &trigger_program);
-    trigger_program_init(PIO_TRIG, 0, offset, TRIGGER, P3, PIN_UPDATE);
-    offset = pio_add_program(PIO_TIME, &timer_program);
-    timer_program_init(PIO_TIME, 0, offset, TRIGGER);
+	uint trigger = timing ? INT_TRIGGER : TRIGGER;
+    trigger_program_init(PIO_TRIG, 0, offset, trigger, P3, PIN_UPDATE);
+
+    if(timing) {
+        offset = pio_add_program(PIO_TIME, &timer_program);
+        timer_program_init(PIO_TIME, 0, offset, TRIGGER, INT_TRIGGER);
+    }
 }
 
 int get_status() {
@@ -194,10 +199,18 @@ void abort_run() {
         set_status(ABORTING);
 
         // take control of trigger pin from PIO
-        init_pin(TRIGGER);
-        gpio_put(TRIGGER, 1);
-        sleep_ms(1);
-        gpio_put(TRIGGER, 0);
+        if(timing) {
+            init_pin(INT_TRIGGER);
+            gpio_put(INT_TRIGGER, 1);
+            sleep_ms(1);
+            gpio_put(INT_TRIGGER, 0);
+        }
+        else {
+            init_pin(TRIGGER);
+            gpio_put(TRIGGER, 1);
+            sleep_ms(1);
+            gpio_put(TRIGGER, 0);
+        }
 
         // reinit PIO to give Trigger pin back
         init_pio();
@@ -871,6 +884,9 @@ void loop() {
                 single_step_mode();
                 update();
             }
+
+            // Re-initialize PIO in case timing has changed.
+            init_pio();
 
             OK();
         }
