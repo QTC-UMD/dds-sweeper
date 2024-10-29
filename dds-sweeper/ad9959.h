@@ -11,6 +11,27 @@
 #include "hardware/structs/watchdog.h"
 #include "pico/stdlib.h"
 
+// Default Pins to use
+#define PIN_MISO 12
+#define PIN_MOSI 15
+#define PIN_SCK 14
+#define PIN_SYNC 10
+#define PIN_CLOCK 21
+#define PIN_UPDATE 22
+#define PIN_RESET 9
+#define P0 19
+#define P1 18
+#define P2 17
+#define P3 16
+#define PROFILE_ASC false
+#define TRIGGER 8
+#define INT_TRIGGER 7
+
+#define PIO_TRIG pio0
+#define PIO_TIME pio1
+
+#define SPI spi1
+
 typedef struct ad9959_config {
     double ref_clk;
     uint32_t pll_mult;
