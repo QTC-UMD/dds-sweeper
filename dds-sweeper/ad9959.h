@@ -12,25 +12,25 @@
 #include "pico/stdlib.h"
 
 // Default Pins to use
-#define PIN_MISO 12
-#define PIN_MOSI 15
-#define PIN_SCK 14
-#define PIN_SYNC 10
+#define PIN_MISO 0  //RX
+#define PIN_MOSI 19  //TX
+#define PIN_SCK 6
+#define PIN_SYNC 3
 #define PIN_CLOCK 21
-#define PIN_UPDATE 22
-#define PIN_RESET 9
-#define P0 19
-#define P1 18
-#define P2 17
-#define P3 16
+#define PIN_UPDATE 8
+#define PIN_RESET 4
+#define P0 12
+#define P1 11
+#define P2 10
+#define P3 9
 #define PROFILE_ASC false
-#define TRIGGER 8
-#define INT_TRIGGER 7
+#define TRIGGER 16
+#define INT_TRIGGER 17
 
 #define PIO_TRIG pio0
 #define PIO_TIME pio1
 
-#define SPI spi1
+#define SPI spi0
 
 typedef struct ad9959_config {
     double ref_clk;
