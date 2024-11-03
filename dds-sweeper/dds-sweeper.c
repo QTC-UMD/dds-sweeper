@@ -251,7 +251,7 @@ bool set_ins(uint type, uint channel, uint addr, double s0, double e0, double de
     if (channel == 4 || channel == 5) {
         instructions[offset - 1] = 0x00;
         if (channel == 5)
-            // repeat instrcution
+            // repeat instruction
             instructions[offset] = 0xff;
         else
             // end instruction
@@ -898,7 +898,7 @@ void loop() {
             if (parsed > 1 && channel > 5) {
                 fast_serial_printf(
                     "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
-                    "instrcution\n");
+                    "instruction\n");
             } else if (channel > 3 && parsed < 2) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
             } else if (!timing && parsed < 5 && channel < 4) {
@@ -930,7 +930,7 @@ void loop() {
             if (parsed > 1 && channel > 5) {
                 fast_serial_printf(
                     "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
-                    "instrcution\n");
+                    "instruction\n");
             } else if (channel > 3 && parsed < 2) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
             } else if (parsed < 6 && channel < 4) {
