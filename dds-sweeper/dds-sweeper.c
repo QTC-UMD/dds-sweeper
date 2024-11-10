@@ -30,6 +30,7 @@
 #include "hardware/flash.h"
 #include "hardware/pio.h"
 #include "hardware/spi.h"
+#include "pico/bootrom.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger_timer.pio.h"
@@ -1015,6 +1016,8 @@ void loop() {
             multicore_fifo_push_blocking(1);
             OK();
         }
+    } else if (strncmp(readstring, "program", 7) == 0) {
+		reset_usb_boot(0, 0);
     } else {
         fast_serial_printf("Unrecognized Command: \"%s\"\n", readstring);
     }
