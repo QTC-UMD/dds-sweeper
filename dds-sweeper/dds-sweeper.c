@@ -716,11 +716,6 @@ void background() {
                 }
             }
 
-            for(int i = 0; i < step; i++){
-                fast_serial_printf("%02x ", instructions[offset + i]);
-            }
-            fast_serial_printf("\n");
-
             // prime PIO
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
@@ -1012,9 +1007,9 @@ void loop() {
 
                         if (DEBUG) {
                             fast_serial_printf(
-                                               "Set ins #%d for channel %d with amp: %3lf %% "
-                                               "freq: %3lf Hz phase: %3lf deg\n",
-                                               addr, channel, amp, freq, phase);
+                                "Set ins #%d for channel %d with amp: %3lf %% "
+                                "freq: %3lf Hz phase: %3lf deg\n",
+                                addr, channel, amp, freq, phase);
                         }
 
                         set_single_step_ins(addr, channel, ftw, pow, asf);
@@ -1108,6 +1103,139 @@ void loop() {
 
             OK();
         } 
+    } else if (strncmp(readstring, "seti ", 4) == 0) {
+        // Set instructions from integers
+        if (ad9959.sweep_type == SS_MODE) {
+            // SINGLE TONE MODE
+            uint32_t channel, addr, time, ftw;
+            uint16_t asf, pow;
+            int parsed = sscanf(readstring, "%*s %u %u %u %u %u %u", &channel, &addr, &ftw,
+                                &asf, &pow, &time);
+
+            if (parsed == 1) {
+                fast_serial_printf("Missing Argument - expected: set <channel:int> ... \n");
+            } else if (channel > 5) {
+                fast_serial_printf(
+                    "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
+                    "instruction\n");
+            } else if (channel > 3 && parsed < 2) {
+                fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+            } else if (timing && parsed < 6) {
+                fast_serial_printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> <ftw:int32> "
+                    "<asf:int16> <pow:int16> (<time:int>)\n");
+            } else {
+                // At this point, parsing tests have been passed
+                if (channel == 4) {
+                    if (!set_stop_instruction(addr)) {
+                        fast_serial_printf("Insufficient space for stop instruction\n");
+                    }
+                } else if (channel == 5) {
+                    if (!set_repeat_instruction(addr)) {
+                        fast_serial_printf("Insufficient space for repeat instruction\n");
+                    }
+                } else {
+                    int ins_offset = get_offset(channel, addr);
+                    if(ins_offset < 0) {
+                        fast_serial_printf("Insufficient space for instruction\n");
+                    } else {
+                        if (DEBUG) {
+                            fast_serial_printf(
+                                "Set ins #%d for channel %d with asf: %d "
+                                "ftw: %d pow: %d\n",
+                                addr, channel, asf, ftw, pow);
+                        }
+
+                        set_single_step_ins(addr, channel, ftw, pow, asf);
+                        if (timing) {
+                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                        }
+                    }
+                }
+            }
+
+            OK();
+        } else {
+            // Sweep mode
+            uint32_t channel, addr, time, start, end, delta, rate, other1, other2;
+            int parsed = 0;
+
+            bool sweep_step_mode = ad9959.sweep_type == AMP2_MODE
+                || ad9959.sweep_type == FREQ2_MODE
+                || ad9959.sweep_type == PHASE2_MODE;
+
+            if (sweep_step_mode) {
+                parsed = sscanf(readstring, "%*s %u %u %u %u %u %u %u %u %u", &channel, &addr, &start,
+                                &end, &delta, &rate, &other1, &other2, &time);
+            } else {
+                parsed = sscanf(readstring, "%*s %u %u %u %u %u %u %u", &channel, &addr, &start,
+                                &end, &delta, &rate, &time);
+            }
+            fast_serial_printf("%d\n", parsed);
+
+            if (parsed == 1) {
+                fast_serial_printf("Missing Argument - expected: set <channel:int> ... \n");
+            } else if (channel > 5) {
+                fast_serial_printf(
+                    "Invalid Channel - expected 0-3 for channels or 4/5 for stop/repeat "
+                    "instruction\n");
+            } else if (channel > 3 && parsed < 2) {
+                fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
+            } else if (!timing && !sweep_step_mode && channel < 4 && parsed < 6) {
+                fast_serial_printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
+                    "<start_point:int> <end_point:int> <delta:int> <rate:int>\n");
+            } else if (timing && !sweep_step_mode && channel < 4 && parsed < 7) {
+                fast_serial_printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
+                    "<start_point:int> <end_point:int> <delta:int> <rate:int> "
+                    "<time:int>\n");
+            } else if (!timing && sweep_step_mode && channel < 4 && parsed < 8) {
+                fast_serial_printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
+                    "<start_point:int> <end_point:int> <delta:int> "
+                    "<rate:double> <other1:int> <other2:int>\n");
+            } else if (timing && sweep_step_mode && channel < 4 && parsed < 9) {
+                fast_serial_printf(
+                    "Missing Argument - expected: set <channel:int> <addr:int> "
+                    "<start_point:int> <end_point:int> <delta:int> "
+                    "<rate:int> <other1:int> <other2:int> <time:int>\n");
+            } else {
+                // At this point, parsing tests have been passed
+
+                if (channel == 4) {
+                    if (!set_stop_instruction(addr)) {
+                        fast_serial_printf("Insufficient space for stop instruction\n");
+                    }
+                } else if (channel == 5) {
+                    if (!set_repeat_instruction(addr)) {
+                        fast_serial_printf("Insufficient space for repeat instruction\n");
+                    }
+                } else {
+                    int ins_offset = get_offset(channel, addr);
+                    if(ins_offset < 0) {
+                        fast_serial_printf("Insufficient space for instruction\n");
+                    } else {
+                        if (ad9959.sweep_type == AMP_MODE || ad9959.sweep_type == AMP2_MODE) {
+                            set_amp_sweep_ins(addr, channel,
+                                              start, end, delta, rate, other1, other2);
+                        } else if (ad9959.sweep_type == FREQ_MODE || ad9959.sweep_type == FREQ2_MODE) {
+                            set_freq_sweep_ins(addr, channel,
+                                               start, end, delta, rate, other1, other2);
+                        } else if (ad9959.sweep_type == PHASE_MODE || ad9959.sweep_type == PHASE2_MODE) {
+                            set_phase_sweep_ins(addr, channel,
+                                                start, end, delta, rate, other1, other2);
+                        } else {
+                            fast_serial_printf(
+                                "Invalid Command - \'mode\' must be defined before "
+                                "instructions can be set\n");
+                        }
+                    }
+                }
+            }
+
+            OK();
+        }
     } else if (strncmp(readstring, "start", 5) == 0) {
         if (ad9959.sweep_type == UNDEF_MODE) {
             fast_serial_printf(
