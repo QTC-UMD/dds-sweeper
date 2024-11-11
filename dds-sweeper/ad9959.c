@@ -9,7 +9,7 @@ double get_asf(double amp, uint16_t* asf) {
 
     // validation
     if (*asf > 1023) *asf = 1023;
-    if (*asf < 1) *asf = 1;
+    if (*asf < 0) *asf = 0;
 
     return *asf / 1023.0;
 }

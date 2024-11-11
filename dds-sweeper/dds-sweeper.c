@@ -79,7 +79,8 @@ int status = STOPPED;
 // global variables
 // =============================================================================
 ad9959_config ad9959;
-char readstring[256];
+#define READSTRING_SIZE 256
+char readstring[READSTRING_SIZE];
 bool DEBUG = true;
 bool timing = false;
 
@@ -1103,7 +1104,7 @@ void loop() {
 
             OK();
         } 
-    } else if (strncmp(readstring, "seti ", 4) == 0) {
+    } else if (strncmp(readstring, "seti ", 5) == 0) {
         // Set instructions from integers
         if (ad9959.sweep_type == SS_MODE) {
             // SINGLE TONE MODE
@@ -1235,6 +1236,116 @@ void loop() {
             }
 
             OK();
+        }
+    } else if (strncmp(readstring, "setb ", 5) == 0) {
+        // Set instructions, bulk/binary
+        uint32_t start_addr, ins_count;
+        int parsed = sscanf(readstring, "%*s %u %u", &start_addr, &ins_count);
+
+        if (parsed < 2) {
+            fast_serial_printf("Missing Argument - expected: setb <start addr:int> <instruction count:int>\n");
+        } else if (get_offset(0, start_addr + ins_count) < 0) {
+            fast_serial_printf("Insufficient space for instructions\n");
+        } else {
+
+            uint32_t bytes_per_ins;
+
+            switch (ad9959.sweep_type) {
+            case SS_MODE: // ftw: 4, asf: 2, pow: 2
+                bytes_per_ins = 8;
+                break;
+            case AMP_MODE: // asf_start: 2, asf_end: 2, delta: 2, rate: 1
+                bytes_per_ins = 7;
+                break;
+            case AMP2_MODE: // asf_start: 2, asf_end: 2, delta: 2, rate: 1, ftw: 4, pow: 2
+                bytes_per_ins = 13;
+                break;
+            case FREQ_MODE: // ftw_start: 4, ftw_end: 4, delta: 4, rate: 1
+                bytes_per_ins = 13;
+                break;
+            case FREQ2_MODE: // ftw_start: 4, ftw_end: 4, delta: 4, rate: 1, asf: 2, pow: 2
+                bytes_per_ins = 17;
+                break;
+            case PHASE_MODE: // pow_start: 2, pow_end: 2, delta: 2, rate: 1
+                bytes_per_ins = 7;
+                break;
+            case PHASE2_MODE: // pow_start: 2, pow_end: 2, delta: 2, rate: 1, ftw: 4, asf: 2
+                bytes_per_ins = 13;
+                break;
+            default:
+                fast_serial_printf(
+                    "Invalid Command - \'mode\' must be defined before "
+                    "instructions can be set\n");
+                bytes_per_ins = 0;
+                break;
+            }
+
+            if (bytes_per_ins > 0) {
+                if (timing) {
+                    bytes_per_ins += 4;
+                }
+
+                uint32_t ins_per_buffer = READSTRING_SIZE / (bytes_per_ins * ad9959.channels);
+                // Data will fit, mode is valid, tell the computer to send it
+                fast_serial_printf("ready for %d bytes\n",
+                                   bytes_per_ins * ad9959.channels * ins_count);
+
+                uint32_t addr = start_addr;
+
+                // In this loop, we read nearly full serial buffers and load them.
+                while (ins_count > ins_per_buffer) {
+                    fast_serial_read(readstring, ins_per_buffer*bytes_per_ins*ad9959.channels);
+
+                    if (ad9959.sweep_type == SS_MODE) {
+                        uint32_t ftw, time;
+                        uint16_t asf, pow;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&ftw, &(readstring[byte_offset + 0]), 4);
+                                memcpy(&asf, &(readstring[byte_offset + 4]), 2);
+                                memcpy(&pow, &(readstring[byte_offset + 6]), 2);
+                                set_single_step_ins(addr, j, ftw, pow, asf);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 8]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    }
+
+                    ins_count -= ins_per_buffer;
+                }
+
+                // In this if statement, we read a final serial buffer and load it.
+                if(ins_count > 0){
+                    fast_serial_read(readstring, ins_count*bytes_per_ins*ad9959.channels);
+
+                    if (ad9959.sweep_type == SS_MODE) {
+                        uint32_t ftw, time;
+                        uint16_t asf, pow;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&ftw, &(readstring[byte_offset + 0]), 4);
+                                memcpy(&asf, &(readstring[byte_offset + 4]), 2);
+                                memcpy(&pow, &(readstring[byte_offset + 6]), 2);
+                                set_single_step_ins(addr, j, ftw, pow, asf);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 8]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    }
+                }
+
+                OK();
+            }
         }
     } else if (strncmp(readstring, "start", 5) == 0) {
         if (ad9959.sweep_type == UNDEF_MODE) {
