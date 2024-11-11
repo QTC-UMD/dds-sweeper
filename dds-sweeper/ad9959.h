@@ -47,40 +47,39 @@
 
 // Instruction memory maps
 // Defines offset in instruction array where register address is stored
-// Register value starts at offset of address + 1
-#define INS_PROFILE 0
-#define INS_CSR 1
+// Register value starts at offset of address
+#define INS_CSR 0
 // For Single Step
-#define INS_SS_FTW 3
-#define INS_SS_POW 8
-#define INS_SS_ACR 11
+#define INS_SS_FTW 2
+#define INS_SS_POW 7
+#define INS_SS_ACR 10
 // For AMP/AMP2 sweep
-#define INS_AMP_ACR 3
-#define INS_AMP_LSRR 7
-#define INS_AMP_RDW 10
-#define INS_AMP_FDW 15
-#define INS_AMP_CW 20
-#define INS_AMP_CFR 25
-#define INS_AMP_FTW 29
-#define INS_AMP_POW 34
+#define INS_AMP_ACR 2
+#define INS_AMP_LSRR 6
+#define INS_AMP_RDW 9
+#define INS_AMP_FDW 14
+#define INS_AMP_CW 19
+#define INS_AMP_CFR 24
+#define INS_AMP_FTW 28
+#define INS_AMP_POW 33
 // For FREQ/FREQ2 sweep
-#define INS_FREQ_FTW 3
-#define INS_FREQ_LSRR 8
-#define INS_FREQ_RDW 11
-#define INS_FREQ_FDW 16
-#define INS_FREQ_CW 21
-#define INS_FREQ_CFR 26
-#define INS_FREQ_ACR 30
-#define INS_FREQ_POW 34
+#define INS_FREQ_FTW 2
+#define INS_FREQ_LSRR 7
+#define INS_FREQ_RDW 10
+#define INS_FREQ_FDW 15
+#define INS_FREQ_CW 20
+#define INS_FREQ_CFR 25
+#define INS_FREQ_ACR 29
+#define INS_FREQ_POW 33
 // For PHASE/PHASE2 sweep
-#define INS_PHASE_POW 3
-#define INS_PHASE_LSRR 6
-#define INS_PHASE_RDW 9
-#define INS_PHASE_FDW 14
-#define INS_PHASE_CW 19
-#define INS_PHASE_CFR 24
-#define INS_PHASE_FTW 28
-#define INS_PHASE_ACR 33
+#define INS_PHASE_POW 2
+#define INS_PHASE_LSRR 5
+#define INS_PHASE_RDW 8
+#define INS_PHASE_FDW 13
+#define INS_PHASE_CW 18
+#define INS_PHASE_CFR 23
+#define INS_PHASE_FTW 27
+#define INS_PHASE_ACR 32
 
 typedef struct ad9959_config {
     double ref_clk;
@@ -90,9 +89,13 @@ typedef struct ad9959_config {
 } ad9959_config;
 
 // get tuning words
-double get_asf(double amp, uint8_t* buf);
-double get_ftw(ad9959_config* c, double freq, uint8_t* buf);
-double get_pow(double phase, uint8_t* buf);
+double get_asf(double amp, uint16_t* asf);
+double get_ftw(ad9959_config* c, double freq, uint32_t* ftw);
+double get_pow(double phase, uint16_t* pow);
+
+void load_acr(uint16_t asf, uint8_t* buf);
+void load_ftw(uint32_t ftw, uint8_t* buf);
+void load_pow(uint16_t pow, uint8_t* buf);
 
 // send tuning words
 void send_channel(uint8_t reg, uint8_t channel, uint8_t* buf, size_t len);
