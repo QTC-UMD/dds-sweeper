@@ -102,12 +102,14 @@ void init_pin(uint pin) {
 }
 
 void init_pio() {
+    pio_clear_instruction_memory(PIO_TRIG);
     uint offset = pio_add_program(PIO_TRIG, &trigger_program);
     uint trigger = timing ? INT_TRIGGER : TRIGGER;
     uint profile_low = PROFILE_ASC ? P0 : P3;
     trigger_program_init(PIO_TRIG, 0, offset, trigger, profile_low, PIN_UPDATE);
 
     if(timing) {
+        pio_clear_instruction_memory(PIO_TIME);
         offset = pio_add_program(PIO_TIME, &timer_program);
         timer_program_init(PIO_TIME, 0, offset, TRIGGER, INT_TRIGGER);
     }
@@ -182,21 +184,10 @@ void abort_run() {
     if (get_status() == RUNNING) {
         set_status(ABORTING);
 
-        // take control of trigger pin from PIO
-        if(timing) {
-            init_pin(INT_TRIGGER);
-            gpio_put(INT_TRIGGER, 1);
-            sleep_ms(1);
-            gpio_put(INT_TRIGGER, 0);
-        }
-        else {
-            init_pin(TRIGGER);
-            gpio_put(TRIGGER, 1);
-            sleep_ms(1);
-            gpio_put(TRIGGER, 0);
-        }
+        // Make trigger PIO trigger immediately so background aborts
+        pio_sm_exec(PIO_TRIG, 0, pio_encode_push(false, false));
 
-        // reinit PIO to give Trigger pin back
+        // reinit PIO
         init_pio();
     }
 }
