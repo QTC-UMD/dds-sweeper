@@ -1314,6 +1314,131 @@ void loop() {
                             }
                             addr++;
                         }
+                    } else if (ad9959.sweep_type == AMP_MODE) {
+                        uint32_t time;
+                        uint16_t asf_start, asf_end, delta;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, 0, 0);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == AMP2_MODE) {
+                        uint32_t ftw, time;
+                        uint16_t asf_start, asf_end, delta, pow;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
+                                memcpy(&pow, &(readstring[byte_offset + 9]), 2);
+                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, ftw, pow);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 11]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == FREQ_MODE) {
+                        uint32_t ftw_start, ftw_end, delta, time;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
+                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
+                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
+                                rate = readstring[byte_offset + 12];
+                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, 0, 0);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 13]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == FREQ2_MODE) {
+                        uint32_t ftw_start, ftw_end, delta, time;
+                        uint16_t asf, pow;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
+                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
+                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
+                                rate = readstring[byte_offset + 12];
+                                memcpy(&asf, &(readstring[byte_offset + 13]), 2);
+                                memcpy(&pow, &(readstring[byte_offset + 15]), 2);
+                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, asf, pow);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 17]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == PHASE_MODE) {
+                        uint32_t time;
+                        uint16_t pow_start, pow_end, delta;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, 0, 0);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == PHASE2_MODE) {
+                        uint32_t ftw, time;
+                        uint16_t asf, pow_start, pow_end, delta;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
+                                memcpy(&asf, &(readstring[byte_offset + 11]), 2);
+                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, ftw, asf);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 15]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
                     }
 
                     ins_count -= ins_per_buffer;
@@ -1341,8 +1466,133 @@ void loop() {
                             }
                             addr++;
                         }
+                    } else if (ad9959.sweep_type == AMP_MODE) {
+                        uint32_t time;
+                        uint16_t asf_start, asf_end, delta;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, 0, 0);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == AMP2_MODE) {
+                        uint32_t ftw, time;
+                        uint16_t asf_start, asf_end, delta, pow;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
+                                memcpy(&pow, &(readstring[byte_offset + 9]), 2);
+                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, ftw, pow);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 11]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == FREQ_MODE) {
+                        uint32_t ftw_start, ftw_end, delta, time;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
+                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
+                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
+                                rate = readstring[byte_offset + 12];
+                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, 0, 0);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 13]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == FREQ2_MODE) {
+                        uint32_t ftw_start, ftw_end, delta, time;
+                        uint16_t asf, pow;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
+                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
+                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
+                                rate = readstring[byte_offset + 12];
+                                memcpy(&asf, &(readstring[byte_offset + 13]), 2);
+                                memcpy(&pow, &(readstring[byte_offset + 15]), 2);
+                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, asf, pow);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 17]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == PHASE_MODE) {
+                        uint32_t time;
+                        uint16_t pow_start, pow_end, delta;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, 0, 0);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
+                    } else if (ad9959.sweep_type == PHASE2_MODE) {
+                        uint32_t ftw, time;
+                        uint16_t asf, pow_start, pow_end, delta;
+                        uint8_t rate;
+                        for (int i = 0; i < ins_per_buffer; i++) {
+                            for (int j = 0; j < ad9959.channels; j++) {
+                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
+                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
+                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
+                                rate = readstring[byte_offset + 6];
+                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
+                                memcpy(&asf, &(readstring[byte_offset + 11]), 2);
+                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, ftw, asf);
+                                if (timing) {
+                                    memcpy(&time, &(readstring[byte_offset + 15]), 4);
+
+                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                                }
+                            }
+                            addr++;
+                        }
                     }
-                }
+                } 
 
                 OK();
             }
