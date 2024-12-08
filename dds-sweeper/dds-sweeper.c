@@ -1175,6 +1175,9 @@ void loop() {
                                 "Invalid Command - \'mode\' must be defined before "
                                 "instructions can be set\n");
                         }
+                        if (timing) {
+                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                        }
                     }
                 }
             }
@@ -1307,6 +1310,9 @@ void loop() {
                             fast_serial_printf(
                                 "Invalid Command - \'mode\' must be defined before "
                                 "instructions can be set\n");
+                        }
+                        if (timing) {
+                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
                         }
                     }
                 }
