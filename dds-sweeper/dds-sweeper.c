@@ -93,7 +93,7 @@ uint8_t instructions[MAX_SIZE];
 
 // bytes to encode an instruction in terms of sweep type
 // order is single step, amp, freq, phase, amp2, freq2, phase2
-uint BYTES_PER_INS[] = {8, 7, 13, 13, 17, 7, 13};
+uint BYTES_PER_INS[] = {8, 7, 13, 7, 13, 17, 13};
 
 // =============================================================================
 // Utility Functions

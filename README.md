@@ -174,9 +174,48 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
         `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
       - Phase Sweeps (mode 6)  
         `secondary1` is the amplitude scale factor, and `secondary2` is the frequency.
-        
 
-  
+
+* `seti`:  
+Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in. If `Debug` is set to `on` it will respond with the actual values set for that instruction. `seti` uses integer values (AD9959 units) rather than floating point values. Otherwise, it is the same as `set`.
+  - Single Stepping (mode 0): `seti <channel:int> <addr:int> <frequency:int> <amplitude:int> <phase:int> (<time:int>)`
+  - Sweep Mode (modes 1-3): `seti <channel:int> <addr:int> <start_point:int> <end_point:int> <delta:int> <ramp-rate:int> (<time:int>)`
+
+    `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `ramp-rate` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
+      - Amplitude Sweeps (mode 1)  
+        `start_point` and `end_point` should be integers between 0 and 1023 (inclusive).
+      - Frequency Sweeps (mode 2)  
+        `start_point`, `end_point`, and `delta` are integers between 0 and $2^{32} - 1$ in units of system clock rate (typically $500$ MHz) over $2^{32}$.
+      - Phase Sweeps (mode 3)
+        `start_point`, `end_point`, and `delta` are between 0 and 65535 (inclusive).
+
+  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:int> <end_point:int> <delta:int> <ramp-rate:int> <secondary1:int> <secondary2:int> (<time:int>)`
+
+    These modes perform a linear sweep on one of the parameters, while simulaneously single stepping on the other two parameters.
+      - Amplitude Sweeps (mode 4)  
+        `secondary1` is the frequency, and `secondary2` is the phase offset.
+      - Frequency Sweeps (mode 5)  
+        `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
+      - Phase Sweeps (mode 6)  
+        `secondary1` is the amplitude scale factor, and `secondary2` is the frequency.
+
+
+* `setb <start address:int> <instruction count:int>`:  
+Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent:  
+   - Single Stepping (mode 0): `<frequency:int 32> <amplitude:int 16> <phase:int 16>`. Total of 8 bytes per channel per instruction.  
+   - Single Stepping (mode 0) with timing: `<frequency:int 32> <amplitude:int 16> <phase:int 16> <time: int 32>`. Total of 12 bytes per channel per instruction.  
+   - Amplitude Sweeps (mode 1): `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8>`. Total of 7 bytes per channel per instruction.  
+   - Amplitude Sweeps (mode 1) with timing: `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8> <time:int 32>`. Total of 11 bytes per channel per instruction.  
+   - Frequency Sweeps (mode 2): `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8>`. Total of 13 bytes per channel per instruction.  
+   - Frequency Sweeps (mode 2) with timing: `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8> <time:int 32>`. Total of 17 bytes per channel per instruction.  
+   - Phase Sweeps (mode 1): `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8>`. Total of 7 bytes per channel per instruction.  
+   - Phase Sweeps (mode 1) with timing: `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8> <time:int 32>`. Total of 11 bytes per channel per instruction.  
+   - Amplitude Sweep and Single Stepping (mode 4): `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <phase:int 16>`. Total of 13 bytes per channel per instruction.  
+   - Amplitude Sweep and Single Stepping (mode 4) with timing: `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <phase:int 16> <time:int 32>`. Total of 17 bytes per channel per instruction.  
+   - Frequency Sweep and Single Stepping (mode 5): `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8> <amplitude:int 16> <phase:int 16>`. Total of 17 bytes per channel per instruction.  
+   - Frequency Sweep and Single Stepping (mode 5) with timing: `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8> <amplitude:int 16> <phase:int 16> <time:int 32>`. Total of 21 bytes per channel per instruction.  
+   - Phase Sweep and Single Stepping (mode 6): `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <amplitude:int 16>`. Total of 13 bytes per channel per instruction.  
+   - Phase Sweep and Single Stepping (mode 6) with timing: `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <amplitude:int 16> <time:int 32>`. Total of 17 bytes per channel per instruction.
 
 
 * `numtriggers`:  
