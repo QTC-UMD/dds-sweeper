@@ -91,6 +91,10 @@ uint timer_dma;
 uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
 
+// bytes to encode an instruction in terms of sweep type
+// order is single step, amp, freq, phase, amp2, freq2, phase2
+uint BYTES_PER_INS[] = {8, 7, 13, 13, 17, 7, 13};
+
 // =============================================================================
 // Utility Functions
 // =============================================================================
@@ -341,6 +345,19 @@ void set_single_step_ins(uint addr, uint channel,
     memcpy(instructions + get_offset(channel, addr) + get_channel_offset(channel), ins, INS_SIZE);
 }
 
+void set_single_step_ins_from_buffer(uint addr, uint channel, char * buffer){
+    uint32_t ftw, time;
+    uint16_t asf, pow;
+    memcpy(&ftw, &(buffer[0]), 4);
+    memcpy(&asf, &(buffer[4]), 2);
+    memcpy(&pow, &(buffer[6]), 2);
+    set_single_step_ins(addr, channel, ftw, pow, asf);
+    if (timing) {
+        memcpy(&time, &(buffer[8]), 4);
+        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+    }
+}
+
 /*
   Set amplitude sweep instruction
  */
@@ -415,6 +432,29 @@ void set_amp_sweep_ins(uint addr, uint channel, uint16_t asf_start, uint16_t asf
     memcpy(&(ins[INS_AMP_CFR+1]), "\x40\x43\x10", 3);
 
     memcpy(instructions + get_offset(channel, addr) + get_channel_offset(channel), ins, INS_SIZE);
+}
+
+void set_amp_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
+    uint32_t ftw, time;
+    uint16_t asf_start, asf_end, delta, pow;
+    uint8_t rate;
+    memcpy(&asf_start, &(buffer[0]), 2);
+    memcpy(&asf_end, &(buffer[2]), 2);
+    memcpy(&delta, &(buffer[4]), 2);
+    rate = buffer[6];
+    if (ad9959.sweep_type == AMP2_MODE) {
+        memcpy(&ftw, &(buffer[7]), 4);
+        memcpy(&pow, &(buffer[9]), 2);
+    }
+    set_amp_sweep_ins(addr, channel, asf_start, asf_end, delta, rate, ftw, pow);
+    if (timing) {
+        if (ad9959.sweep_type == AMP2_MODE) {
+            memcpy(&time, &(buffer[11]), 4);
+        } else {
+            memcpy(&time, &(buffer[7]), 4);
+        }
+        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+    }
 }
 
 void parse_amp_sweep_ins(uint addr, uint channel,
@@ -526,6 +566,29 @@ void set_freq_sweep_ins(uint addr, uint channel, uint32_t ftw_start, uint32_t ft
     memcpy(instructions + get_offset(channel, addr) + get_channel_offset(channel), ins, INS_SIZE);
 }
 
+void set_freq_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
+    uint32_t ftw_start, ftw_end, delta, time;
+    uint16_t asf, pow;
+    uint8_t rate;
+    memcpy(&ftw_start, &(buffer[0]), 4);
+    memcpy(&ftw_end, &(buffer[4]), 4);
+    memcpy(&delta, &(buffer[8]), 4);
+    rate = buffer[12];
+    if (ad9959.sweep_type == FREQ2_MODE) {
+        memcpy(&asf, &(buffer[13]), 2);
+        memcpy(&pow, &(buffer[15]), 2);
+    }
+    set_freq_sweep_ins(addr, channel, ftw_start, ftw_end, delta, rate, asf, pow);
+    if (timing) {
+        if (ad9959.sweep_type == FREQ2_MODE) {
+            memcpy(&time, &(buffer[17]), 4);
+        } else {
+            memcpy(&time, &(buffer[13]), 4);
+        }
+        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+    }
+}
+
 void parse_freq_sweep_ins(uint addr, uint channel,
                           double start, double end, double sweep_rate, double amp, double phase){
     uint16_t asf, pow;
@@ -622,6 +685,29 @@ void set_phase_sweep_ins(uint addr, uint channel, uint16_t pow_start, uint16_t p
     memcpy(&(ins[INS_PHASE_CFR+1]), "\xc0\x43\x10", 3);
 
     memcpy(instructions + get_offset(channel, addr) + get_channel_offset(channel), ins, INS_SIZE);
+}
+
+void set_phase_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
+    uint32_t ftw, time;
+    uint16_t asf, pow_start, pow_end, delta;
+    uint8_t rate;
+    memcpy(&pow_start, &(buffer[0]), 2);
+    memcpy(&pow_end, &(buffer[2]), 2);
+    memcpy(&delta, &(buffer[4]), 2);
+    rate = buffer[6];
+    if (ad9959.sweep_type == PHASE2_MODE){
+        memcpy(&ftw, &(buffer[7]), 4);
+        memcpy(&asf, &(buffer[11]), 2);
+    }
+    set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
+    if (timing) {
+        if (ad9959.sweep_type == PHASE2_MODE) {
+            memcpy(&time, &(buffer[15]), 4);
+        } else {
+            memcpy(&time, &(buffer[7]), 4);
+        }
+        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+    }
 }
 
 void parse_phase_sweep_ins(uint addr, uint channel,
@@ -1239,37 +1325,7 @@ void loop() {
             fast_serial_printf("Insufficient space for instructions\n");
         } else {
 
-            uint32_t bytes_per_ins;
-
-            switch (ad9959.sweep_type) {
-            case SS_MODE: // ftw: 4, asf: 2, pow: 2
-                bytes_per_ins = 8;
-                break;
-            case AMP_MODE: // asf_start: 2, asf_end: 2, delta: 2, rate: 1
-                bytes_per_ins = 7;
-                break;
-            case AMP2_MODE: // asf_start: 2, asf_end: 2, delta: 2, rate: 1, ftw: 4, pow: 2
-                bytes_per_ins = 13;
-                break;
-            case FREQ_MODE: // ftw_start: 4, ftw_end: 4, delta: 4, rate: 1
-                bytes_per_ins = 13;
-                break;
-            case FREQ2_MODE: // ftw_start: 4, ftw_end: 4, delta: 4, rate: 1, asf: 2, pow: 2
-                bytes_per_ins = 17;
-                break;
-            case PHASE_MODE: // pow_start: 2, pow_end: 2, delta: 2, rate: 1
-                bytes_per_ins = 7;
-                break;
-            case PHASE2_MODE: // pow_start: 2, pow_end: 2, delta: 2, rate: 1, ftw: 4, asf: 2
-                bytes_per_ins = 13;
-                break;
-            default:
-                fast_serial_printf(
-                    "Invalid Command - \'mode\' must be defined before "
-                    "instructions can be set\n");
-                bytes_per_ins = 0;
-                break;
-            }
+            uint bytes_per_ins = BYTES_PER_INS[ad9959.sweep_type];
 
             if (bytes_per_ins > 0) {
                 if (timing) {
@@ -1287,151 +1343,25 @@ void loop() {
                 while (ins_count > ins_per_buffer) {
                     fast_serial_read(readstring, ins_per_buffer*bytes_per_ins*ad9959.channels);
 
-                    if (ad9959.sweep_type == SS_MODE) {
-                        uint32_t ftw, time;
-                        uint16_t asf, pow;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&ftw, &(readstring[byte_offset + 0]), 4);
-                                memcpy(&asf, &(readstring[byte_offset + 4]), 2);
-                                memcpy(&pow, &(readstring[byte_offset + 6]), 2);
-                                set_single_step_ins(addr, j, ftw, pow, asf);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 8]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
+                    for (int i = 0; i < ins_per_buffer; i++) {
+                        for(int j = 0; j < ad9959.channels; j++) {
+                            uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                            if (ad9959.sweep_type == SS_MODE) {
+                                set_single_step_ins_from_buffer(addr, j,
+                                                                &(readstring[byte_offset]));
+                            } else if (ad9959.sweep_type == AMP_MODE || ad9959.sweep_type == AMP2_MODE) {
+                                set_amp_sweep_ins_from_buffer(addr, j,
+                                                              &(readstring[byte_offset]));
+                            } else if (ad9959.sweep_type == FREQ_MODE || ad9959.sweep_type == FREQ2_MODE) {
+                                set_freq_sweep_ins_from_buffer(addr, j,
+                                                               &(readstring[byte_offset]));
+                            } else if (ad9959.sweep_type == PHASE_MODE || ad9959.sweep_type == PHASE2_MODE) {
+                                set_phase_sweep_ins_from_buffer(addr, j,
+                                                                &(readstring[byte_offset]));
                             }
-                            addr++;
                         }
-                    } else if (ad9959.sweep_type == AMP_MODE) {
-                        uint32_t time;
-                        uint16_t asf_start, asf_end, delta;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, 0, 0);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == AMP2_MODE) {
-                        uint32_t ftw, time;
-                        uint16_t asf_start, asf_end, delta, pow;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
-                                memcpy(&pow, &(readstring[byte_offset + 9]), 2);
-                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, ftw, pow);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 11]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == FREQ_MODE) {
-                        uint32_t ftw_start, ftw_end, delta, time;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
-                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
-                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
-                                rate = readstring[byte_offset + 12];
-                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, 0, 0);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 13]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == FREQ2_MODE) {
-                        uint32_t ftw_start, ftw_end, delta, time;
-                        uint16_t asf, pow;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
-                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
-                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
-                                rate = readstring[byte_offset + 12];
-                                memcpy(&asf, &(readstring[byte_offset + 13]), 2);
-                                memcpy(&pow, &(readstring[byte_offset + 15]), 2);
-                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, asf, pow);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 17]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == PHASE_MODE) {
-                        uint32_t time;
-                        uint16_t pow_start, pow_end, delta;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, 0, 0);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == PHASE2_MODE) {
-                        uint32_t ftw, time;
-                        uint16_t asf, pow_start, pow_end, delta;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
-                                memcpy(&asf, &(readstring[byte_offset + 11]), 2);
-                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, ftw, asf);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 15]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
+                        addr++;
                     }
-
                     ins_count -= ins_per_buffer;
                 }
 
@@ -1439,149 +1369,24 @@ void loop() {
                 if(ins_count > 0){
                     fast_serial_read(readstring, ins_count*bytes_per_ins*ad9959.channels);
 
-                    if (ad9959.sweep_type == SS_MODE) {
-                        uint32_t ftw, time;
-                        uint16_t asf, pow;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&ftw, &(readstring[byte_offset + 0]), 4);
-                                memcpy(&asf, &(readstring[byte_offset + 4]), 2);
-                                memcpy(&pow, &(readstring[byte_offset + 6]), 2);
-                                set_single_step_ins(addr, j, ftw, pow, asf);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 8]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
+                    for (int i = 0; i < ins_per_buffer; i++) {
+                        for(int j = 0; j < ad9959.channels; j++) {
+                            uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
+                            if (ad9959.sweep_type == SS_MODE) {
+                                set_single_step_ins_from_buffer(addr, j,
+                                                                &(readstring[byte_offset]));
+                            } else if (ad9959.sweep_type == AMP_MODE || ad9959.sweep_type == AMP2_MODE) {
+                                set_amp_sweep_ins_from_buffer(addr, j,
+                                                              &(readstring[byte_offset]));
+                            } else if (ad9959.sweep_type == FREQ_MODE || ad9959.sweep_type == FREQ2_MODE) {
+                                set_freq_sweep_ins_from_buffer(addr, j,
+                                                               &(readstring[byte_offset]));
+                            } else if (ad9959.sweep_type == PHASE_MODE || ad9959.sweep_type == PHASE2_MODE) {
+                                set_phase_sweep_ins_from_buffer(addr, j,
+                                                                &(readstring[byte_offset]));
                             }
-                            addr++;
                         }
-                    } else if (ad9959.sweep_type == AMP_MODE) {
-                        uint32_t time;
-                        uint16_t asf_start, asf_end, delta;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, 0, 0);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == AMP2_MODE) {
-                        uint32_t ftw, time;
-                        uint16_t asf_start, asf_end, delta, pow;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&asf_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&asf_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
-                                memcpy(&pow, &(readstring[byte_offset + 9]), 2);
-                                set_amp_sweep_ins(addr, j, asf_start, asf_end, delta, rate, ftw, pow);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 11]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == FREQ_MODE) {
-                        uint32_t ftw_start, ftw_end, delta, time;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
-                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
-                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
-                                rate = readstring[byte_offset + 12];
-                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, 0, 0);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 13]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == FREQ2_MODE) {
-                        uint32_t ftw_start, ftw_end, delta, time;
-                        uint16_t asf, pow;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&ftw_start, &(readstring[byte_offset + 0]), 4);
-                                memcpy(&ftw_end, &(readstring[byte_offset + 4]), 4);
-                                memcpy(&delta, &(readstring[byte_offset + 8]), 4);
-                                rate = readstring[byte_offset + 12];
-                                memcpy(&asf, &(readstring[byte_offset + 13]), 2);
-                                memcpy(&pow, &(readstring[byte_offset + 15]), 2);
-                                set_freq_sweep_ins(addr, j, ftw_start, ftw_end, delta, rate, asf, pow);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 17]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == PHASE_MODE) {
-                        uint32_t time;
-                        uint16_t pow_start, pow_end, delta;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, 0, 0);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 7]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
-                    } else if (ad9959.sweep_type == PHASE2_MODE) {
-                        uint32_t ftw, time;
-                        uint16_t asf, pow_start, pow_end, delta;
-                        uint8_t rate;
-                        for (int i = 0; i < ins_per_buffer; i++) {
-                            for (int j = 0; j < ad9959.channels; j++) {
-                                uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
-                                memcpy(&pow_start, &(readstring[byte_offset + 0]), 2);
-                                memcpy(&pow_end, &(readstring[byte_offset + 2]), 2);
-                                memcpy(&delta, &(readstring[byte_offset + 4]), 2);
-                                rate = readstring[byte_offset + 6];
-                                memcpy(&ftw, &(readstring[byte_offset + 7]), 4);
-                                memcpy(&asf, &(readstring[byte_offset + 11]), 2);
-                                set_phase_sweep_ins(addr, j, pow_start, pow_end, delta, rate, ftw, asf);
-                                if (timing) {
-                                    memcpy(&time, &(readstring[byte_offset + 15]), 4);
-
-                                    set_time(addr, time, ad9959.sweep_type, ad9959.channels);
-                                }
-                            }
-                            addr++;
-                        }
+                        addr++;
                     }
                 } 
 
