@@ -824,6 +824,7 @@ void background() {
 // =============================================================================
 
 void loop() {
+    bzero(readstring, 256);
     fast_serial_read_until(readstring, 256, '\n');
     int local_status = get_status();
 
@@ -1058,7 +1059,7 @@ void loop() {
                     "instruction\n");
             } else if (channel > 3 && parsed < 2) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
-            } else if (timing && parsed < 6) {
+            } else if (channel < 4 && ((timing && parsed < 6) || (!timing && parsed < 5))) {
                 fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> <frequency:double> "
                     "<amplitude:double> <phase:double> (<time:int>)\n");
@@ -1201,7 +1202,7 @@ void loop() {
                     "instruction\n");
             } else if (channel > 3 && parsed < 2) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> <addr:int> \n");
-            } else if (timing && parsed < 6) {
+            } else if (channel < 4 && ((timing && parsed < 6) || (!timing && parsed < 5))) {
                 fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> <ftw:int32> "
                     "<asf:int16> <pow:int16> (<time:int>)\n");
