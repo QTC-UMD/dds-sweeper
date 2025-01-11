@@ -58,7 +58,7 @@ Finally, the mode and timing should be setup with the `mode` command. The DDS Sw
 
 ### Program loading
 
-Once setup is complete, instructions (steps or sweeps, depending on the mode) can be loaded using the `set`, `seti`, or `setb` commands. In addition to output instructions, there are special stop and repeat instructions (which can only be loaded using `seti` and `setb`). With instructions are loaded, the address (order in which they are executed) is specified, so the order of loading need not match the order of execution. The stop instruction ends program execution, while the repeat instruction restarts program execution from the beginning. Instructions are loaded into an uninitialized array, so skipping instruction addresses or failing to specify stop/repeat at the end of the program may result in undefined behavior.
+Once setup is complete, instructions (steps or sweeps, depending on the mode) and timings can be loaded using the `set`, `seti`, or `setb` commands. In addition to output instructions, there are special stop and repeat instructions (which can only be loaded using `seti` and `setb`). With instructions are loaded, the address (order in which they are executed) is specified, so the order of loading need not match the order of execution. Timing is set per address, so it is common to all channels. The stop instruction ends program execution, while the repeat instruction restarts program execution from the beginning. Instructions are loaded into an uninitialized array, so skipping instruction addresses or failing to specify stop/repeat at the end of the program may result in undefined behavior.
 
 ### Execution
 
