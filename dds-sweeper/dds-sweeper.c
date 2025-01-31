@@ -647,10 +647,10 @@ void set_phase_sweep_ins(uint addr, uint channel, uint16_t pow_start, uint16_t p
 
     if (ad9959.sweep_type == PHASE2_MODE) {
         // set amp
-        ins[INS_PHASE_FTW] = AD9959_REG_ACR;
+        ins[INS_PHASE_FTW] = AD9959_REG_FTW;
         load_ftw(ftw, &(ins[INS_PHASE_FTW+1]));
 
-        ins[INS_PHASE_ACR] = AD9959_REG_POW;
+        ins[INS_PHASE_ACR] = AD9959_REG_ACR;
         load_acr(asf, &(ins[INS_PHASE_ACR+1]));
     }
 
