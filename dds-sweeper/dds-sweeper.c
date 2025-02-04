@@ -840,6 +840,7 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
+		OK();
     } else if (strncmp(readstring, "numtriggers", 11) == 0) {
         fast_serial_printf("%u\n", triggers);
     } else if (strncmp(readstring, "reset", 5) == 0) {
