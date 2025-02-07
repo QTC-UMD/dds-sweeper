@@ -702,7 +702,7 @@ void set_phase_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
     if (timing) {
         if (ad9959.sweep_type == PHASE2_MODE) {
-            memcpy(&time, &(buffer[15]), 4);
+            memcpy(&time, &(buffer[13]), 4);
         } else {
             memcpy(&time, &(buffer[7]), 4);
         }
