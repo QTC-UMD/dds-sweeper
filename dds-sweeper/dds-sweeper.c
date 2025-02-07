@@ -444,12 +444,12 @@ void set_amp_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     rate = buffer[6];
     if (ad9959.sweep_type == AMP2_MODE) {
         memcpy(&ftw, &(buffer[7]), 4);
-        memcpy(&pow, &(buffer[9]), 2);
+        memcpy(&pow, &(buffer[11]), 2);
     }
     set_amp_sweep_ins(addr, channel, asf_start, asf_end, delta, rate, ftw, pow);
     if (timing) {
         if (ad9959.sweep_type == AMP2_MODE) {
-            memcpy(&time, &(buffer[11]), 4);
+            memcpy(&time, &(buffer[13]), 4);
         } else {
             memcpy(&time, &(buffer[7]), 4);
         }
@@ -1118,7 +1118,6 @@ void loop() {
                 parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr, &start,
                                 &end, &sweep_rate, &time);
             }
-            fast_serial_printf("%d\n", parsed);
 
             if (parsed == 1) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> ... \n");
