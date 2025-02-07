@@ -444,12 +444,12 @@ void set_amp_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     rate = buffer[6];
     if (ad9959.sweep_type == AMP2_MODE) {
         memcpy(&ftw, &(buffer[7]), 4);
-        memcpy(&pow, &(buffer[9]), 2);
+        memcpy(&pow, &(buffer[11]), 2);
     }
     set_amp_sweep_ins(addr, channel, asf_start, asf_end, delta, rate, ftw, pow);
     if (timing) {
         if (ad9959.sweep_type == AMP2_MODE) {
-            memcpy(&time, &(buffer[11]), 4);
+            memcpy(&time, &(buffer[13]), 4);
         } else {
             memcpy(&time, &(buffer[7]), 4);
         }
@@ -647,10 +647,10 @@ void set_phase_sweep_ins(uint addr, uint channel, uint16_t pow_start, uint16_t p
 
     if (ad9959.sweep_type == PHASE2_MODE) {
         // set amp
-        ins[INS_PHASE_FTW] = AD9959_REG_ACR;
+        ins[INS_PHASE_FTW] = AD9959_REG_FTW;
         load_ftw(ftw, &(ins[INS_PHASE_FTW+1]));
 
-        ins[INS_PHASE_ACR] = AD9959_REG_POW;
+        ins[INS_PHASE_ACR] = AD9959_REG_ACR;
         load_acr(asf, &(ins[INS_PHASE_ACR+1]));
     }
 
@@ -702,7 +702,7 @@ void set_phase_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
     if (timing) {
         if (ad9959.sweep_type == PHASE2_MODE) {
-            memcpy(&time, &(buffer[15]), 4);
+            memcpy(&time, &(buffer[13]), 4);
         } else {
             memcpy(&time, &(buffer[7]), 4);
         }
@@ -840,6 +840,7 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "getfreqs", 8) == 0) {
         measure_freqs();
+		OK();
     } else if (strncmp(readstring, "numtriggers", 11) == 0) {
         fast_serial_printf("%u\n", triggers);
     } else if (strncmp(readstring, "reset", 5) == 0) {
@@ -1117,7 +1118,6 @@ void loop() {
                 parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr, &start,
                                 &end, &sweep_rate, &time);
             }
-            fast_serial_printf("%d\n", parsed);
 
             if (parsed == 1) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> ... \n");

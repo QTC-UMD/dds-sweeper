@@ -91,7 +91,7 @@ Note: Commands must be terminated with `\n`.
 Responds with a string containing the firmware version.
 
 * `status`:  
-Returns the opperating status of the DDS-Sweeper. `0` status indicates manual mode. `1` status indicates buffered execution.
+Returns the opperating status of the DDS-Sweeper. `0` status indicates manual mode. `1` status indicates buffered execution. `2` status indicates aborting buffered execution.
 
 * `getfreqs`:  
 Responds with a multi-line string containing the current operating frequencies of various clocks (you will be most interested in `pll_sys` and `clk_sys`). Multiline string ends with `ok\n`.
@@ -130,12 +130,11 @@ Configures what mode the DDS-Sweeper is operating in
   - 3: phase sweep
   - 4: amplitude sweep with frequency/phase steps
   - 5: frequency sweep with amplitude/phase steps
-  - 6: phase sweep with amplitude/frequency steps0  
+  - 6: phase sweep with frequency/amplitude steps  
 
   The operating mode must be set before buffered execution instructions can be programmed into the DDS-Sweeper.  
   A `trigger-source` of `0` means the Sweeper is expecting external triggers. A `trigger-source` of `1` means the Sweeper will send its own triggers and `set` commands will require an aditional `time` argument.
-  The Sweeper must be in manual mode in order for the `setfreq`, `setphase`, and `setamp` commands to work.
-  
+
 ### Manual output commands
 
 
@@ -156,9 +155,9 @@ Manually set the amplitude scale factor of a specified channel. Channels are 0-3
 * `set`:  
 Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in. If `Debug` is set to `on` it will respond with the actual values set for that instruction.
   - Single Stepping (mode 0): `set <channel:int> <addr:int> <frequency:float> <amplitude:float> <phase:float> (<time:int>)`
-  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <ramp-rate:int> (<time:int>)`
+  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> (<time:int>)`
 
-    `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `ramp-rate` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
+    `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
       - Amplitude Sweeps (mode 1)  
         `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proprtion of the maximum output amplitude. `delta` is the desired change in that proprtion. For all three of those values there is a resolution of $\frac{1}{1024} \approx 0.09766\$
       - Frequency Sweeps (mode 2)  
@@ -166,7 +165,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
       - Phase Sweeps (mode 3)
         `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
 
-  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <ramp-rate:int> <secondary1:double> <secondary2:double> (<time:int>)`
+  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <secondary1:double> <secondary2:double> (<time:int>)`
 
     These modes perform a linear sweep on one of the parameters, while simulaneously single stepping on the other two parameters.
       - Amplitude Sweeps (mode 4)  
@@ -174,7 +173,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
       - Frequency Sweeps (mode 5)  
         `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
       - Phase Sweeps (mode 6)  
-        `secondary1` is the amplitude scale factor, and `secondary2` is the frequency.
+        `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
 
 
 * `seti`:  
@@ -198,7 +197,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
       - Frequency Sweeps (mode 5)  
         `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
       - Phase Sweeps (mode 6)  
-        `secondary1` is the amplitude scale factor, and `secondary2` is the frequency.
+        `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
 
 * `setb <start address:int> <instruction count:int>`:  
 Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent:  
