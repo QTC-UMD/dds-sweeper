@@ -4,44 +4,51 @@
 // =============================================================================
 // calculate tuning words
 // =============================================================================
-double get_asf(double amp, uint8_t* buf) {
-    uint32_t asf = round(amp * 1024);
+double get_asf(double amp, uint16_t* asf) {
+    *asf = round(amp * 1024);
 
     // validation
-    if (asf > 1023) asf = 1023;
-    if (asf < 1) asf = 1;
+    if (*asf > 1023) *asf = 1023;
+    if (*asf < 0) *asf = 0;
 
-    buf[0] = 0x00;
-    buf[1] = ((0x300 & asf) >> 8) | 0x10;
-    buf[2] = 0xff & asf;
-
-    return asf / 1023.0;
+    return *asf / 1023.0;
 }
-double get_ftw(ad9959_config* c, double freq, uint8_t* buf) {
+
+double get_ftw(ad9959_config* c, double freq, uint32_t* ftw) {
     double sys_clk = c->ref_clk * c->pll_mult;
-    uint32_t ftw = round(freq * 4294967296.l / sys_clk);
+    *ftw = round(freq * 4294967296.l / sys_clk);
 
     // maybe add some validation here
 
-    // flip order of bits (little endian -> big endian)
-    uint8_t* bytes = (uint8_t*)&ftw;
-    for (int i = 0; i < 4; i++) {
-        buf[i] = bytes[3 - i];
-    }
-
     // return the frequency that was able to be set
-    return ftw * sys_clk / 4294967296.l;
+    return *ftw * sys_clk / 4294967296.l;
 }
-double get_pow(double phase, uint8_t* buf) {
-    uint32_t pow = round(phase / 360.0 * 16384.0);
+
+double get_pow(double phase, uint16_t* pow) {
+    *pow = round(phase / 360.0 * 16384.0);
 
     // make sure pow is within range?
-    pow = pow % 16383;
+    *pow = *pow % 16383;
 
-    buf[0] = (0xff00 & pow) >> 8;
-    buf[1] = 0xff & pow;
+    return *pow / 16383.0 * 360.0;
+}
 
-    return pow / 16383.0 * 360.0;
+void load_acr(uint16_t asf, uint8_t* buf) {
+    buf[0] = 0x00;
+    buf[1] = ((0x0300 & asf) >> 8) | 0x10;
+    buf[2] = 0xff & asf;
+}
+
+void load_ftw(uint32_t ftw, uint8_t* buf) {
+    buf[0] = (ftw & 0xFF000000) >> 24;
+    buf[1] = (ftw & 0x00FF0000) >> 16;
+    buf[2] = (ftw & 0x0000FF00) >> 8;
+    buf[3] = (ftw & 0x000000FF);
+}
+
+void load_pow(uint16_t pow, uint8_t* buf) {
+    buf[0] = (pow & 0xFF00) >> 8;
+    buf[1] = pow & 0x00FF;
 }
 
 // =============================================================================
