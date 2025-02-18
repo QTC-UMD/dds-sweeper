@@ -62,12 +62,7 @@ int status = STOPPED;
 // clock status
 #define INTERNAL 0
 #define EXTERNAL 1
-typedef struct {
-    int mode;  // internal or external
-    double freq;  // AD9959 reference frequency
-    int mult;  // AD9959 PLL multiplier, 1 or 4-20
-} clk_status_t;
-clk_status_t clk_status = {INTERNAL, 125e6, 4};
+int clk_mode = INTERNAL;
 
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
@@ -843,9 +838,7 @@ void loop() {
     } else if (strncmp(readstring, "status", 6) == 0) {
         fast_serial_printf("%d\n", local_status);
     } else if (strncmp(readstring, "clkstatus", 9) == 0) {
-        mutex_enter_blocking(&status_mutex);
-        fast_serial_printf("%d %lf %d", clk_status.mode, clk_status.freq, clk_status.mult);
-        mutex_exit(&status_mutex);
+        fast_serial_printf("%d %lf %d", clk_mode, ad9959.ref_clk, ad9959.pll_mult);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
         DEBUG = 1;
         OK();
@@ -1021,11 +1014,7 @@ void loop() {
                 update();
             }
             // update status
-            mutex_enter_blocking(&status_mutex);
-            clk_status.mode = mode;
-            clk_status.freq = freq;
-            if (parsed == 3) clk_status.mult = mult;
-            mutex_exit(&status_mutex);
+            clk_mode = mode;
             OK();
         }
     } else if (strncmp(readstring, "mode", 4) == 0) {
