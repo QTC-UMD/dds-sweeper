@@ -93,6 +93,12 @@ Responds with a string containing the firmware version.
 * `status`:  
 Returns the opperating status of the DDS-Sweeper. `0` status indicates manual mode. `1` status indicates buffered execution. `2` status indicates aborting buffered execution.
 
+* `clkstatus`:
+Returns the clocking status of the DDS-Sweeper as three numbers: `<int:mode> <double:freq> <int:mult>`.
+Mode can be `0` for internal clocking or `1` for external clocking of the AD9959.
+The frequency is the AD9959 reference frequency, in Hz.
+`mult` is the AD9959 PLL multiplier. The corresponding system frequency is `freq*mult`.
+
 * `getfreqs`:  
 Responds with a multi-line string containing the current operating frequencies of various clocks (you will be most interested in `pll_sys` and `clk_sys`). Multiline string ends with `ok\n`.
 

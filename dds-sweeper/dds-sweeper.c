@@ -59,6 +59,16 @@ int status = STOPPED;
 #define FREQ2_MODE 5
 #define PHASE2_MODE 6
 
+// clock status
+#define INTERNAL 0
+#define EXTERNAL 1
+typedef struct {
+    int mode;  // internal or external
+    double freq;  // AD9959 reference frequency
+    int mult;  // AD9959 PLL multiplier, 1 or 4-20
+} clk_status_t;
+clk_status_t clk_status = {INTERNAL, 125e6, 4};
+
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 
@@ -832,6 +842,10 @@ void loop() {
         fast_serial_printf("%s\n", VERSION);
     } else if (strncmp(readstring, "status", 6) == 0) {
         fast_serial_printf("%d\n", local_status);
+    } else if (strncmp(readstring, "clkstatus", 9) == 0) {
+        mutex_enter_blocking(&status_mutex);
+        fast_serial_printf("%d %lf %d", clk_status.mode, clk_status.freq, clk_status.mult);
+        mutex_exit(&status_mutex);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
         DEBUG = 1;
         OK();
@@ -972,13 +986,13 @@ void loop() {
             OK();
         }
     } else if (strncmp(readstring, "setclock", 8) == 0) {
-        uint src;   // 0 = internal, 1 = external
+        uint mode;   // 0 = internal, 1 = external
         uint freq;  // in Hz (up to 133 MHz)
         uint mult;  // PLL multiplier to use, 1 or 4-20
-        int parsed = sscanf(readstring, "%*s %u %u %u", &src, &freq, &mult);
+        int parsed = sscanf(readstring, "%*s %u %u %u", &mode, &freq, &mult);
         if (parsed < 2) {
             fast_serial_printf("Missing Argument - expected: setclock <mode:int> <freq:int> (<pll_mult:int>)\n");
-        } else if (src > 1) {
+        } else if (mode > 1) {
             fast_serial_printf("Invalid Mode - mode must be in range 0-1\n");
         } else if (parsed == 3 && (mult != 1 && !(mult >= 4 && mult <= 20))) {
             fast_serial_printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
@@ -986,7 +1000,7 @@ void loop() {
             fast_serial_printf("Requested system clock frequency (%d MHz) exceeds 500 MHz\n", mult*freq*1e-6);
         } else {
             // Set new clock frequency
-            if (src == 0) {
+            if (mode == INTERNAL) {
                 if (set_sys_clock_khz(freq / 1000, false)) {
                     set_ref_clk(&ad9959, freq);
                     clock_configure(clk_peri, 0,
@@ -1006,6 +1020,12 @@ void loop() {
                 set_pll_mult(&ad9959, mult);
                 update();
             }
+            // update status
+            mutex_enter_blocking(&status_mutex);
+            clk_status.mode = mode;
+            clk_status.freq = freq;
+            if (parsed == 3) clk_status.mult = mult;
+            mutex_exit(&status_mutex);
             OK();
         }
     } else if (strncmp(readstring, "mode", 4) == 0) {
