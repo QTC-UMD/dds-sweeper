@@ -120,7 +120,7 @@ If changing the reference clock and PLL multiplier, you should set the reference
 The AD9959's PLL has an output range of 100-160 MHz or 255-500 MHz with VCO gain enabled. The pico will automatically enable the VCO gain bit if the requested frequency is in the upper range. If trying to use the PLL multiplier to generate a frequency between 160 and 255 MHz, there is no guarantee of operation.
 
 * `setchannels <num:int>`:  
-Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0. If number of channels is set to `1`, buffered execution instructions will be written to all 4 channels simultaneously.
+Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0. If number of channels is set to `0`, buffered execution instructions will be written to all 4 channels simultaneously.
 
 * `mode <sweep-type:int> <trigger-source:int>`:  
 Configures what mode the DDS-Sweeper is operating in
