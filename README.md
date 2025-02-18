@@ -109,10 +109,17 @@ Stops buffered execution immediately.
 
 ### Setup commands
 
-* `setclock <mode:int> <freq:int>`:  
+* `setclock <mode:int> <freq:int> (<pll_mult:int>)`:  
 Reconfigures the source/reference clock.
-  - Mode `0`: Use pico system clock as reference to the AD9959
-  - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico
+  - Mode `0`: Use pico system clock as reference to the AD9959.
+    In this mode, the frequency provided also sets the pico system clock
+    and it cannot exceed 133 MHz.
+    The dds sweeper defaults to this mode with a frequency of 125 MHz and a PLL multiplier of 4.
+  - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico.
+    Setting this mode does not change the pico system clock.
+
+  `pll_mult` is an optional input that sets the AD9959's PLL multiplier on the Reference Clock input. The default value is 4, giving the AD9959 a system clock of 500 MHz with the pico's 125 MHz reference. Valid values are 1 or 4-20.  
+  The AD9959's PLL has an output range of 100-160 MHz or 255-500 MHz with VCO gain enabled. The pico will automatically enable the VCO gain bit if the requested frequency is in the upper range. If trying to use the PLL multiplier to generate a frequency between 160 and 255 MHz, there is no guarantee of operation.
 
 * `setmult <pll_mult:int>`:    
 Sets the AD9959's pll multiplier on the Reference Clock input. The default value is 4, giving the AD9959 a system clock of 500 MHz with the pico's 125 MHz reference. Valid values are 1 or 4-20.  

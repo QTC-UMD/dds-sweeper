@@ -971,52 +971,42 @@ void loop() {
 
             OK();
         }
-    } else if (strncmp(readstring, "setmult", 7) == 0) {
-        uint mult;
-
-        int parsed = sscanf(readstring, "%*s %u", &mult);
-
-        if (parsed < 1) {
-            fast_serial_printf("Missing Argument - expected: setmult <pll_mult:int>\n");
-        } else if (mult != 1 && !(mult >= 4 && mult <= 20)) {
-            fast_serial_printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
-        } else {
-            // could do more validation to make sure it is a valid
-            // multiply/system clock freq
-            set_pll_mult(&ad9959, mult);
-            update();
-
-            OK();
-        }
     } else if (strncmp(readstring, "setclock", 8) == 0) {
         uint src;   // 0 = internal, 1 = external
         uint freq;  // in Hz (up to 133 MHz)
-        int parsed = sscanf(readstring, "%*s %u %u", &src, &freq);
+        uint mult;  // PLL multiplier to use, 1 or 4-20
+        int parsed = sscanf(readstring, "%*s %u %u %u", &src, &freq, &mult);
         if (parsed < 2) {
-            fast_serial_printf("Missing Argument - expected: setclock <mode:int> <freq:int>\n");
+            fast_serial_printf("Missing Argument - expected: setclock <mode:int> <freq:int> (<pll_mult:int>)\n");
+        } else if (src > 1) {
+            fast_serial_printf("Invalid Mode - mode must be in range 0-1\n");
+        } else if (parsed == 3 && (mult != 1 && !(mult >= 4 && mult <= 20))) {
+            fast_serial_printf("Invalid Multiplier: multiplier must be 1 or in range 4-20\n");
+        } else if (parsed == 3 && (mult*freq > 500e6)) {
+            fast_serial_printf("Requested system clock frequency (%d MHz) exceeds 500 MHz\n", mult*freq*1e-6);
         } else {
-            if (src > 1) {
-                fast_serial_printf("Invalid Mode - mode must be in range 0-1\n");
-            } else {
-                // Set new clock frequency
-                if (src == 0) {
-                    if (set_sys_clock_khz(freq / 1000, false)) {
-                        set_ref_clk(&ad9959, freq);
-                        clock_configure(clk_peri, 0,
-                                        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
-                                        125 * MHZ);
-                        clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
-                        OK();
-                    } else {
-                        fast_serial_printf("Failure. Cannot exactly achieve that clock frequency.\n");
-                    }
-                } else {
+            // Set new clock frequency
+            if (src == 0) {
+                if (set_sys_clock_khz(freq / 1000, false)) {
                     set_ref_clk(&ad9959, freq);
-                    gpio_deinit(PIN_CLOCK);
-                    if (DEBUG) fast_serial_printf("AD9959 requires external reference clock\n");
-                    OK();
+                    clock_configure(clk_peri, 0,
+                                    CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
+                                    125 * MHZ);
+                    clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
+                } else {
+                    fast_serial_printf("Failure. Cannot exactly achieve that clock frequency.\n");
                 }
+            } else {
+                set_ref_clk(&ad9959, freq);
+                gpio_deinit(PIN_CLOCK);
+                if (DEBUG) fast_serial_printf("AD9959 requires external reference clock\n");
             }
+            // Set new mult if provided
+            if (parsed == 3) {
+                set_pll_mult(&ad9959, mult);
+                update();
+            }
+            OK();
         }
     } else if (strncmp(readstring, "mode", 4) == 0) {
         // mode <type:int> <timing:int>
