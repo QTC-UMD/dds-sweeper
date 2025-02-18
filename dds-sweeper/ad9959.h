@@ -86,6 +86,7 @@ typedef struct ad9959_config {
     uint32_t pll_mult;
     int sweep_type;
     uint channels;
+    uint mirror;
 } ad9959_config;
 
 // get tuning words
