@@ -755,9 +755,9 @@ void get_instructions(void) {
 
     for (uint i = 0; i < num_ins; i++) {
         uint offset = i * step;
-        uint chan_addr_offset = 2;
+        uint chan_addr_offset = 3;
 
-        // test if i need to skip two
+        // test if i need to skip three (instructions are 15 large? tuning words are 12 bytes)
         offset += chan_addr_offset;
 
         // fast_serial_printf("Offset is: %u ||", offset);
@@ -785,12 +785,12 @@ void get_instructions(void) {
 
         fast_serial_printf("Instruction %u: %u %u %u %u\n", i, ftw, asf, pow, time);
 
-        // get memory layout/format
-        fast_serial_printf("Instruction format: %02X %02X %02X %02X | %02X %02X | %02X %02X | %02X %02X %02X %02X\n",
-            instructions[offset + 0], instructions[offset + 1], instructions[offset + 2], instructions[offset + 3],
-            instructions[offset + 4], instructions[offset + 5],
-            instructions[offset + 6], instructions[offset + 7],
-            instructions[offset + 8], instructions[offset + 9], instructions[offset + 10], instructions[offset + 11]);
+        // // get memory layout/format
+        // fast_serial_printf("Instruction format: %02X %02X %02X %02X | %02X %02X | %02X %02X | %02X %02X %02X %02X\n",
+        //     instructions[offset + 0], instructions[offset + 1], instructions[offset + 2], instructions[offset + 3],
+        //     instructions[offset + 4], instructions[offset + 5],
+        //     instructions[offset + 6], instructions[offset + 7],
+        //     instructions[offset + 8], instructions[offset + 9], instructions[offset + 10], instructions[offset + 11]);
     }
 
     fast_serial_printf("End of Instruction Table\n");
