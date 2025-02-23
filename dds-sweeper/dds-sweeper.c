@@ -838,7 +838,7 @@ void loop() {
     } else if (strncmp(readstring, "status", 6) == 0) {
         fast_serial_printf("%d\n", local_status);
     } else if (strncmp(readstring, "clkstatus", 9) == 0) {
-        fast_serial_printf("%d %lf %d", clk_mode, ad9959.ref_clk, ad9959.pll_mult);
+        fast_serial_printf("%d %lf %d\n", clk_mode, ad9959.ref_clk, ad9959.pll_mult);
     } else if (strncmp(readstring, "debug on", 8) == 0) {
         DEBUG = 1;
         OK();
