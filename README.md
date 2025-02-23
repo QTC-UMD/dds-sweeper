@@ -93,6 +93,12 @@ Responds with a string containing the firmware version.
 * `status`:  
 Returns the opperating status of the DDS-Sweeper. `0` status indicates manual mode. `1` status indicates buffered execution. `2` status indicates aborting buffered execution.
 
+* `clkstatus`:
+Returns the clocking status of the DDS-Sweeper as three numbers: `<int:mode> <double:freq> <int:mult>`.
+Mode can be `0` for internal clocking or `1` for external clocking of the AD9959.
+The frequency is the AD9959 reference frequency, in Hz.
+`mult` is the AD9959 PLL multiplier. The corresponding system frequency is `freq*mult`.
+
 * `getfreqs`:  
 Responds with a multi-line string containing the current operating frequencies of various clocks (you will be most interested in `pll_sys` and `clk_sys`). Multiline string ends with `ok\n`.
 
@@ -109,15 +115,17 @@ Stops buffered execution immediately.
 
 ### Setup commands
 
-* `setclock <mode:int> <freq:int>`:  
+* `setclock <mode:int> <freq:int> (<pll_mult:int>)`:  
 Reconfigures the source/reference clock.
-  - Mode `0`: Use pico system clock as reference to the AD9959
-  - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico
+  - Mode `0`: Use pico system clock as reference to the AD9959.
+    In this mode, the frequency provided also sets the pico system clock
+    and it cannot exceed 133 MHz.
+    The dds sweeper defaults to this mode with a frequency of 125 MHz and a PLL multiplier of 4.
+  - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico.
+    Setting this mode does not change the pico system clock.
 
-* `setmult <pll_mult:int>`:    
-Sets the AD9959's pll multiplier on the Reference Clock input. The default value is 4, giving the AD9959 a system clock of 500 MHz with the pico's 125 MHz reference. Valid values are 1 or 4-20.  
-If changing the reference clock and PLL multiplier, you should set the reference clock frequency first.  
-The AD9959's PLL has an output range of 100-160 MHz or 255-500 MHz with VCO gain enabled. The pico will automatically enable the VCO gain bit if the requested frequency is in the upper range. If trying to use the PLL multiplier to generate a frequency between 160 and 255 MHz, there is no guarantee of operation.
+  `pll_mult` is an optional input that sets the AD9959's PLL multiplier on the Reference Clock input. The default value is 4, giving the AD9959 a system clock of 500 MHz with the pico's 125 MHz reference. Valid values are 1 or 4-20.  
+  The AD9959's PLL has an output range of 100-160 MHz or 255-500 MHz with VCO gain enabled. The pico will automatically enable the VCO gain bit if the requested frequency is in the upper range. If trying to use the PLL multiplier to generate a frequency between 160 and 255 MHz, there is no guarantee of operation.
 
 * `setchannels <num:int>`:  
 Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0. If number of channels is set to `1`, buffered execution instructions will be written to all 4 channels simultaneously.
