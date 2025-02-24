@@ -739,7 +739,6 @@ void parse_phase_sweep_ins(uint addr, uint channel,
 }
 
 void get_instructions(void) {
-    // Just trying to get this up and running for setb single stepping
     fast_serial_printf("Instruction Table Dump:\n");
 
     uint step = INS_SIZE * ad9959.channels + 1; // INS_SIZE changes for instruction type
@@ -755,35 +754,69 @@ void get_instructions(void) {
 
     for (uint i = 0; i < num_ins; i++) {
         uint offset = i * step;
-        uint chan_addr_offset = 3;
+        // uint chan_addr_offset = 3 + 1;
+        // offset += chan_addr_offset;
+
+        fast_serial_printf("Offset is: %u | ", offset);
+
+        fast_serial_printf("Raw bytes for instruction %u: ", i);
+        for (uint j = 0; j < step; j++) {
+            fast_serial_printf("%02X ", instructions[offset + j]);
+        }
+        fast_serial_printf("\n");
+
+    }
+
+    fast_serial_printf("End of Instruction Table\n");
+}
+
+void get_memory_layout(void) {
+    // Currently trying single step mode
+    fast_serial_printf("Instruction Table Dump:\n");
+
+    uint step = INS_SIZE * ad9959.channels + 1; // INS_SIZE changes for instruction type
+    uint num_ins = 0;
+
+    // Count valid instructions
+    while (num_ins < MAX_SIZE / step) {
+        if (instructions[num_ins * step] == 0x00) {
+            break;
+        }
+        num_ins++;
+    }
+
+    for (uint i = 0; i < num_ins; i++) {
+        uint offset = i * step;
+        // uint chan_addr_offset = 3 + 1;
 
         // test if i need to skip three (instructions are 15 large? tuning words are 12 bytes)
-        offset += chan_addr_offset;
+        // offset += chan_addr_offset;
 
-        // fast_serial_printf("Offset is: %u ||", offset);
+        fast_serial_printf("Intructio is: %u | ", offset);
 
-        // fast_serial_printf("Raw bytes for instruction %u: ", i);
-        // for (uint j = 0; j < step; j++) {
-        //     fast_serial_printf("%02X ", instructions[offset + j]);
-        // }
-        // fast_serial_printf("\n");
+        fast_serial_printf("Raw bytes for instruction %u: ", i);
+        for (uint j = 0; j < step; j++) {
+            fast_serial_printf("%02X ", instructions[offset + j]);
+        }
+        fast_serial_printf("\n");
 
-        uint32_t ftw, time;
-        uint16_t asf, pow;
+        // uint32_t ftw, time;
+        // uint16_t asf, pow;
         
-        // byte alignment for single step ins -- note that this is not general yet
-        memcpy(&ftw,  &instructions[offset + 0], 4);  // Frequency Tuning Word
-        memcpy(&asf,  &instructions[offset + 4], 2);  // Amplitude Scale Factor
-        memcpy(&pow,  &instructions[offset + 6], 2);  // Phase Offset Word
-        memcpy(&time, &instructions[offset + 8], 4);  // Time
+        // // byte alignment for single step ins -- note that this is not general yet
+        // memcpy(&ftw,  &instructions[offset + 0], 4);  // Frequency Tuning Word
+        // memcpy(&asf,  &instructions[offset + 4], 2);  // Amplitude Scale Factor
+        // memcpy(&pow,  &instructions[offset + 6], 2);  // Phase Offset Word
+        // // memcpy(&pow,  &instructions[offset + 5], 2);  // Phase Offset Word
+        // memcpy(&time, &instructions[offset + 8], 4);  // Time
 
-        // // Convert byte order to little-endian
-        ftw = __builtin_bswap32(ftw);
-        asf = __builtin_bswap16(asf);
-        pow = __builtin_bswap16(pow);
-        time = __builtin_bswap32(time);
+        // // // Convert byte order to little-endian
+        // ftw = __builtin_bswap32(ftw);
+        // asf = __builtin_bswap16(asf);
+        // pow = __builtin_bswap16(pow);
+        // time = __builtin_bswap32(time);
 
-        fast_serial_printf("Instruction %u: %u %u %u %u\n", i, ftw, asf, pow, time);
+        // fast_serial_printf("Instruction %u: %u %u %u %u\n", i, ftw, asf, pow, time);
 
         // // get memory layout/format
         // fast_serial_printf("Instruction format: %02X %02X %02X %02X | %02X %02X | %02X %02X | %02X %02X %02X %02X\n",
@@ -795,18 +828,6 @@ void get_instructions(void) {
 
     fast_serial_printf("End of Instruction Table\n");
 }
-
-// void get_instructions(const *buffer, uint32_t buffer_size ) {
-//     // Just trying to get this up and running for setb single stepping
-    
-//     // get buffer
-
-//     // get buffersize
-
-//     fast_serial_printf("Instruction Table Dump:\n");
-//     fast_serial_write(buffer, buffer_size);
-//     fast_serial_printf("End of Instruction Table\n");
-// }
 
 // =============================================================================
 // Table Running Loop
