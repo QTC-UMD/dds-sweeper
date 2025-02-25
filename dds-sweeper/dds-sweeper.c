@@ -752,81 +752,100 @@ void get_instructions(void) {
         num_ins++;
     }
 
+    // Loop out raw instruction bytes 
     for (uint i = 0; i < num_ins; i++) {
         uint offset = i * step;
-        // uint chan_addr_offset = 3 + 1;
-        // offset += chan_addr_offset;
-
         fast_serial_printf("Offset is: %u | ", offset);
-
         fast_serial_printf("Raw bytes for instruction %u: ", i);
         for (uint j = 0; j < step; j++) {
             fast_serial_printf("%02X ", instructions[offset + j]);
         }
         fast_serial_printf("\n");
-
     }
 
     fast_serial_printf("End of Instruction Table\n");
 }
 
-void get_memory_layout(void) {
-    // Currently trying single step mode
-    fast_serial_printf("Instruction Table Dump:\n");
+void get_memory_layout(uint sweep_mode) {
 
-    uint step = INS_SIZE * ad9959.channels + 1; // INS_SIZE changes for instruction type
-    uint num_ins = 0;
-
-    // Count valid instructions
-    while (num_ins < MAX_SIZE / step) {
-        if (instructions[num_ins * step] == 0x00) {
+    // Each prints with timing since it's trivial to remove
+    char datatypes[1024] = "";
+    switch (sweep_mode) {
+        case 0:
+            fast_serial_printf("Mode 0 - Single Steps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('frequency', np.uint32), "
+                            "('amplitude', np.uint16), "
+                            "('phase', np.uint16), "
+                            "('time', np.uint32)])\n");
             break;
-        }
-        num_ins++;
-    }
-
-    for (uint i = 0; i < num_ins; i++) {
-        uint offset = i * step;
-        // uint chan_addr_offset = 3 + 1;
-
-        // test if i need to skip three (instructions are 15 large? tuning words are 12 bytes)
-        // offset += chan_addr_offset;
-
-        fast_serial_printf("Intructio is: %u | ", offset);
-
-        fast_serial_printf("Raw bytes for instruction %u: ", i);
-        for (uint j = 0; j < step; j++) {
-            fast_serial_printf("%02X ", instructions[offset + j]);
-        }
-        fast_serial_printf("\n");
-
-        // uint32_t ftw, time;
-        // uint16_t asf, pow;
+        case 1:
+            fast_serial_printf("Mode 1 - Amplitude Sweeps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('start amplitude', np.uint16), "
+                            "('stop amplitude', np.uint16), "
+                            "('delta', np.uint16), "
+                            "('rate', np.uint8), "
+                            "('time', np.uint32)])\n");
+            break;
+        case 2:
+            fast_serial_printf("Mode 2 - Frequency Sweeps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('start frequency', np.uint32), "
+                            "('stop frequency', np.uint32), "
+                            "('delta', np.uint32), "
+                            "('rate', np.uint8), "
+                            "('time', np.uint32)])\n");
+            break;
+        case 3:
+            fast_serial_printf("Mode 3 - Phase Sweeps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('start phase', np.uint16), "
+                            "('stop phase', np.uint16), "
+                            "('delta', np.uint16), "
+                            "('rate', np.uint8), "
+                            "('time', np.uint32)])\n");
+            break;
+        case 4:
+            fast_serial_printf("Mode 4 - Amplitude2 Sweeps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('start amplitude', np.uint16), "
+                            "('stop amplitude', np.uint16), "
+                            "('delta', np.uint16), "
+                            "('rate', np.uint8), "
+                            "('frequency', np.uint32), "
+                            "('phase', np.uint16), "
+                            "('time', np.uint32)])\n");
+            break;
+        case 5:
+            fast_serial_printf("Mode 5 - Frequency2 Sweeps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('start frequency', np.uint32), "
+                            "('stop frequency', np.uint32), "
+                            "('delta', np.uint32), "
+                            "('rate', np.uint8), "
+                            "('amplitude', np.uint16), "
+                            "('phase', np.uint16), "
+                            "('time', np.uint32)])\n");
+            break;
+        case 6:
+            fast_serial_printf("Mode 6 - Phase2 Sweeps\n");
+            strcat(datatypes, "datatypes = np.dtype(["
+                            "('start phase', np.uint16), "
+                            "('stop phase', np.uint16), "
+                            "('delta', np.uint16), "
+                            "('rate', np.uint8), "
+                            "('frequency', np.uint32), "
+                            "('amplitude', np.uint16), "
+                            "('time', np.uint32)])\n");
+            break;
         
-        // // byte alignment for single step ins -- note that this is not general yet
-        // memcpy(&ftw,  &instructions[offset + 0], 4);  // Frequency Tuning Word
-        // memcpy(&asf,  &instructions[offset + 4], 2);  // Amplitude Scale Factor
-        // memcpy(&pow,  &instructions[offset + 6], 2);  // Phase Offset Word
-        // // memcpy(&pow,  &instructions[offset + 5], 2);  // Phase Offset Word
-        // memcpy(&time, &instructions[offset + 8], 4);  // Time
-
-        // // // Convert byte order to little-endian
-        // ftw = __builtin_bswap32(ftw);
-        // asf = __builtin_bswap16(asf);
-        // pow = __builtin_bswap16(pow);
-        // time = __builtin_bswap32(time);
-
-        // fast_serial_printf("Instruction %u: %u %u %u %u\n", i, ftw, asf, pow, time);
-
-        // // get memory layout/format
-        // fast_serial_printf("Instruction format: %02X %02X %02X %02X | %02X %02X | %02X %02X | %02X %02X %02X %02X\n",
-        //     instructions[offset + 0], instructions[offset + 1], instructions[offset + 2], instructions[offset + 3],
-        //     instructions[offset + 4], instructions[offset + 5],
-        //     instructions[offset + 6], instructions[offset + 7],
-        //     instructions[offset + 8], instructions[offset + 9], instructions[offset + 10], instructions[offset + 11]);
+        default:
+            fast_serial_printf("Couldn't find mode info\n");
     }
+    fast_serial_printf("Active channels: %d\n", ad9959.channels);
+    fast_serial_printf("%s\n", datatypes);
 
-    fast_serial_printf("End of Instruction Table\n");
 }
 
 // =============================================================================
@@ -958,7 +977,8 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "readtable", 9) == 0) {
         get_instructions();
-        // get_instructions(instructions, 64 * 8);
+    } else if (strncmp(readstring, "getmode", 7) == 0) {
+        get_memory_layout(ad9959.sweep_type);
     } else if (strncmp(readstring, "load", 4) == 0) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overread"
