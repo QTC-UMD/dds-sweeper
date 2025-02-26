@@ -743,6 +743,7 @@ void get_instructions(void) {
 
     uint step = INS_SIZE * ad9959.channels + 1; // INS_SIZE changes for instruction type
     uint num_ins = 0;
+    uint chan_addr_offset = 4; // CHECK
 
     // Count valid instructions
     while (num_ins < MAX_SIZE / step) {
@@ -752,10 +753,13 @@ void get_instructions(void) {
         num_ins++;
     }
 
-    // Loop out raw instruction bytes 
+    // Loop through each instruction line to get raw bytes 
     for (uint i = 0; i < num_ins; i++) {
         uint offset = i * step;
+        offset += chan_addr_offset; // CHECK
+
         fast_serial_printf("Offset is: %u | ", offset);
+        fast_serial_printf("Step is: %u | ", step);
         fast_serial_printf("Raw bytes for instruction %u: ", i);
         for (uint j = 0; j < step; j++) {
             fast_serial_printf("%02X ", instructions[offset + j]);
