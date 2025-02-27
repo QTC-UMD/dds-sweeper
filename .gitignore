@@ -5,6 +5,7 @@ build/ddssweeper/*
 !build/ddssweeper/dds-sweeper.uf2
 
 .vscode/
+.venv
 
 # kicad extras
 fp-info-cache
