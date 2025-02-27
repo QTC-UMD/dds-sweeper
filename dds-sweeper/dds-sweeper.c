@@ -759,7 +759,7 @@ void get_instructions(void) {
         offset += chan_addr_offset; // CHECK
 
         fast_serial_printf("Offset is: %u | ", offset);
-        fast_serial_printf("Step is: %u | ", step);
+        // fast_serial_printf("Step is: %u | ", step);
         fast_serial_printf("Raw bytes for instruction %u: ", i);
         for (uint j = 0; j < step; j++) {
             fast_serial_printf("%02X ", instructions[offset + j]);
@@ -771,87 +771,85 @@ void get_instructions(void) {
 }
 
 void get_memory_layout(uint sweep_mode) {
+    // Each prints with timing since it's trivial to remove -- Do we want to handle that?
+    char datatypes[4096] = "datatypes = np.dtype([";
+    char channel_datatype[256];
 
-    // Each prints with timing since it's trivial to remove
-    char datatypes[1024] = "";
+    // Print mode information only once
     switch (sweep_mode) {
         case 0:
             fast_serial_printf("Mode 0 - Single Steps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('frequency', np.uint32), "
-                            "('amplitude', np.uint16), "
-                            "('phase', np.uint16), "
-                            "('time', np.uint32)])\n");
             break;
         case 1:
             fast_serial_printf("Mode 1 - Amplitude Sweeps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('start amplitude', np.uint16), "
-                            "('stop amplitude', np.uint16), "
-                            "('delta', np.uint16), "
-                            "('rate', np.uint8), "
-                            "('time', np.uint32)])\n");
             break;
         case 2:
             fast_serial_printf("Mode 2 - Frequency Sweeps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('start frequency', np.uint32), "
-                            "('stop frequency', np.uint32), "
-                            "('delta', np.uint32), "
-                            "('rate', np.uint8), "
-                            "('time', np.uint32)])\n");
             break;
         case 3:
             fast_serial_printf("Mode 3 - Phase Sweeps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('start phase', np.uint16), "
-                            "('stop phase', np.uint16), "
-                            "('delta', np.uint16), "
-                            "('rate', np.uint8), "
-                            "('time', np.uint32)])\n");
             break;
         case 4:
             fast_serial_printf("Mode 4 - Amplitude2 Sweeps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('start amplitude', np.uint16), "
-                            "('stop amplitude', np.uint16), "
-                            "('delta', np.uint16), "
-                            "('rate', np.uint8), "
-                            "('frequency', np.uint32), "
-                            "('phase', np.uint16), "
-                            "('time', np.uint32)])\n");
             break;
         case 5:
             fast_serial_printf("Mode 5 - Frequency2 Sweeps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('start frequency', np.uint32), "
-                            "('stop frequency', np.uint32), "
-                            "('delta', np.uint32), "
-                            "('rate', np.uint8), "
-                            "('amplitude', np.uint16), "
-                            "('phase', np.uint16), "
-                            "('time', np.uint32)])\n");
             break;
         case 6:
             fast_serial_printf("Mode 6 - Phase2 Sweeps\n");
-            strcat(datatypes, "datatypes = np.dtype(["
-                            "('start phase', np.uint16), "
-                            "('stop phase', np.uint16), "
-                            "('delta', np.uint16), "
-                            "('rate', np.uint8), "
-                            "('frequency', np.uint32), "
-                            "('amplitude', np.uint16), "
-                            "('time', np.uint32)])\n");
             break;
-        
         default:
             fast_serial_printf("Couldn't find mode info\n");
+            return;
     }
+
+    // Get dtype for each active channel
+    for (uint i = 0; i < ad9959.channels; i++) {
+        switch (sweep_mode) {
+            case 0:
+                sprintf(channel_datatype, "('frequency%d', np.uint32), ('amplitude%d', np.uint16), ('phase%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i);
+                break;
+            case 1:
+                sprintf(channel_datatype, "('start amplitude%d', np.uint16), ('stop amplitude%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('time%d', np.uint32), ", i, i, i, i, i);
+                break;
+            case 2:
+                sprintf(channel_datatype, "('start frequency%d', np.uint32), ('stop frequency%d', np.uint32), ('delta%d', np.uint32), ('rate%d', np.uint8), ('time%d', np.uint32), ", i, i, i, i, i);
+                break;
+            case 3:
+                sprintf(channel_datatype, "('start phase%d', np.uint16), ('stop phase%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('time%d', np.uint32), ", i, i, i, i, i);
+                break;
+            case 4:
+                sprintf(channel_datatype, "('start amplitude%d', np.uint16), ('stop amplitude%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('frequency%d', np.uint32), ('phase%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i, i, i, i);
+                break;
+            case 5:
+                sprintf(channel_datatype, "('start frequency%d', np.uint32), ('stop frequency%d', np.uint32), ('delta%d', np.uint32), ('rate%d', np.uint8), ('amplitude%d', np.uint16), ('phase%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i, i, i, i);
+                break;
+            case 6:
+                sprintf(channel_datatype, "('start phase%d', np.uint16), ('stop phase%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('frequency%d', np.uint32), ('amplitude%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i, i, i, i);
+                break;
+            default:
+                fast_serial_printf("Couldn't find mode info\n");
+                return;
+        }
+        strcat(datatypes, channel_datatype);
+    }
+
+    // Trailing comma + space, then close array
+    datatypes[strlen(datatypes) - 2] = '\0';
+    strcat(datatypes, "])\n");
+
     fast_serial_printf("Active channels: %d\n", ad9959.channels);
-    fast_serial_printf("%s\n", datatypes);
 
+    // Chunk response since some of those strings are longer than 128 
+    const size_t chunk_size = 128;
+    size_t datatypes_len = strlen(datatypes);
+    for (size_t offset = 0; offset < datatypes_len; offset += chunk_size) {
+        char chunk[chunk_size + 1];
+        strncpy(chunk, datatypes + offset, chunk_size);
+        chunk[chunk_size] = '\0';
+        fast_serial_printf("%s", chunk);
+    }
 }
-
 // =============================================================================
 // Table Running Loop
 // =============================================================================
