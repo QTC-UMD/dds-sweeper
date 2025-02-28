@@ -743,6 +743,88 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
 }
 
+
+void get_memory_layout(uint sweep_mode) {
+    // Each prints with timing since it's trivial to remove -- Do we want to handle that?
+    char datatypes[4096] = "datatypes = np.dtype([";
+    char channel_datatype[256];
+
+    // Print mode information only once
+    switch (sweep_mode) {
+        case 0:
+            fast_serial_printf("Mode 0 - Single Steps\n");
+            break;
+        case 1:
+            fast_serial_printf("Mode 1 - Amplitude Sweeps\n");
+            break;
+        case 2:
+            fast_serial_printf("Mode 2 - Frequency Sweeps\n");
+            break;
+        case 3:
+            fast_serial_printf("Mode 3 - Phase Sweeps\n");
+            break;
+        case 4:
+            fast_serial_printf("Mode 4 - Amplitude2 Sweeps\n");
+            break;
+        case 5:
+            fast_serial_printf("Mode 5 - Frequency2 Sweeps\n");
+            break;
+        case 6:
+            fast_serial_printf("Mode 6 - Phase2 Sweeps\n");
+            break;
+        default:
+            fast_serial_printf("Couldn't find mode info\n");
+            return;
+    }
+
+    // Get dtype for each active channel
+    for (uint i = 0; i < ad9959.channels; i++) {
+        switch (sweep_mode) {
+            case 0:
+                sprintf(channel_datatype, "('frequency%d', np.uint32), ('amplitude%d', np.uint16), ('phase%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i);
+                break;
+            case 1:
+                sprintf(channel_datatype, "('start amplitude%d', np.uint16), ('stop amplitude%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('time%d', np.uint32), ", i, i, i, i, i);
+                break;
+            case 2:
+                sprintf(channel_datatype, "('start frequency%d', np.uint32), ('stop frequency%d', np.uint32), ('delta%d', np.uint32), ('rate%d', np.uint8), ('time%d', np.uint32), ", i, i, i, i, i);
+                break;
+            case 3:
+                sprintf(channel_datatype, "('start phase%d', np.uint16), ('stop phase%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('time%d', np.uint32), ", i, i, i, i, i);
+                break;
+            case 4:
+                sprintf(channel_datatype, "('start amplitude%d', np.uint16), ('stop amplitude%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('frequency%d', np.uint32), ('phase%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i, i, i, i);
+                break;
+            case 5:
+                sprintf(channel_datatype, "('start frequency%d', np.uint32), ('stop frequency%d', np.uint32), ('delta%d', np.uint32), ('rate%d', np.uint8), ('amplitude%d', np.uint16), ('phase%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i, i, i, i);
+                break;
+            case 6:
+                sprintf(channel_datatype, "('start phase%d', np.uint16), ('stop phase%d', np.uint16), ('delta%d', np.uint16), ('rate%d', np.uint8), ('frequency%d', np.uint32), ('amplitude%d', np.uint16), ('time%d', np.uint32), ", i, i, i, i, i, i, i);
+                break;
+            default:
+                fast_serial_printf("Couldn't find mode info\n");
+                return;
+        }
+        strcat(datatypes, channel_datatype);
+    }
+
+    // Trailing comma + space, then close array
+    datatypes[strlen(datatypes) - 2] = '\0';
+    strcat(datatypes, "])\n");
+
+    fast_serial_printf("Active channels: %d\n", ad9959.channels);
+
+    // Chunk response since some of those strings are longer than 128 
+    const size_t chunk_size = 128;
+    size_t datatypes_len = strlen(datatypes);
+    for (size_t offset = 0; offset < datatypes_len; offset += chunk_size) {
+        char chunk[chunk_size + 1];
+        strncpy(chunk, datatypes + offset, chunk_size);
+        chunk[chunk_size] = '\0';
+        fast_serial_printf("%s", chunk);
+    }
+}
+
 // =============================================================================
 // Table Running Loop
 // =============================================================================
@@ -887,6 +969,8 @@ void loop() {
         flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
         restore_interrupts(ints);
         OK();
+    } else if (strncmp(readstring, "getmode", 7) == 0) {
+        get_memory_layout(ad9959.sweep_type);
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
 
