@@ -176,6 +176,7 @@ void reset() {
     sync();
     ad9959.sweep_type = 1;
     ad9959.channels = 1;
+    ad9959.mirror = 0;
     INS_SIZE = 14;
 
     set_pll_mult(&ad9959, ad9959.pll_mult);
@@ -272,7 +273,7 @@ bool set_stop_instruction(uint addr){
 void set_ins_csr(uint8_t * ins, uint channel){
     // set csr
     ins[INS_CSR] = AD9959_REG_CSR;
-    if (ad9959.channels == 1) {
+    if (ad9959.mirror) {
         ins[INS_CSR+1] = 0xf2;
     } else {
         ins[INS_CSR+1] = (1u << (channel + 4)) | 0x02;
@@ -290,7 +291,7 @@ void set_ins_sweeps(uint addr, uint channel, bool rising){
     // The least significant 4 bits in the byte correspond to the first value the
     // profile pin hits during an update. Since the pin should always go high first,
     // that means the least significant nibble should always be 0xf.
-    if (rising && ad9959.channels == 1) {
+    if (rising && ad9959.mirror) {
         // case: upward sweep single channel mode
         instructions[offset] = 0xff;
     } else if (rising) {
@@ -301,7 +302,7 @@ void set_ins_sweeps(uint addr, uint channel, bool rising){
         else {
             instructions[offset] |= (1u << (3 - channel)) | (1u << (7 - channel));
         }
-    } else if (ad9959.channels == 1) {
+    } else if (ad9959.mirror) {
         // case: downward sweep single channel mode
         instructions[offset] = 0x0f;
     } else {
@@ -978,10 +979,17 @@ void loop() {
 
         if (parsed < 1) {
             fast_serial_printf("Missing Argument - expected: setchannels <num:int>\n");
-        } else if (channels < 1 || channels > 4) {
-            fast_serial_printf("Invalid Channels - expected: num must be in range 0-3\n");
+        } else if (channels < 0 || channels > 4) {
+            fast_serial_printf("Invalid Channels - expected: num must be in range 0-4\n");
         } else {
-            ad9959.channels = channels;
+            if (channels == 0) {
+                // mirror commands to all channels
+                ad9959.channels = 1;
+                ad9959.mirror = 1;
+            } else {
+                ad9959.channels = channels;
+                ad9959.mirror = 0;
+            }
             OK();
         }
     } else if (strncmp(readstring, "setfreq", 7) == 0) {
