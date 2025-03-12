@@ -744,6 +744,42 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
 }
 
+void get_instructions(void) {
+    fast_serial_printf("Instruction Table Dump:\n"); // header
+
+    uint step = INS_SIZE * ad9959.channels + 1; // INS_SIZE changes for instruction type
+    uint num_ins = 0;
+    uint32_t time_command;
+
+    // Count valid instructions
+    while (num_ins < MAX_SIZE / step) {
+        if (instructions[num_ins * step] == 0x00) {
+            break;
+        }
+        num_ins++;
+    }
+
+    // Loop through each instruction line to get raw bytes 
+    for (uint i = 0; i < num_ins; i++) {
+        uint offset = i * step;
+        fast_serial_printf("Offset: %u | ", offset);
+        fast_serial_printf("Bytes for instruction %u: ", i);
+        for (uint j = 0; j < step; j++) {
+            fast_serial_printf("%02X ", instructions[offset + j]);
+        }
+
+        if (timing) {
+            fast_serial_printf("| Timing: ");
+            uint timing_offset = i*sizeof(uint32_t) + TIMING_OFFSET;
+            time_command = *((uint32_t *)(instructions + timing_offset));
+            fast_serial_printf("%02X ", time_command);
+
+        }
+        fast_serial_printf("\n");
+    }
+    fast_serial_printf("End of Instruction Table\n"); // footer
+}
+
 // =============================================================================
 // Table Running Loop
 // =============================================================================
@@ -873,6 +909,8 @@ void loop() {
         update();
         read_all();
         OK();
+    } else if (strncmp(readstring, "readtable", 9) == 0) {
+        get_instructions();
     } else if (strncmp(readstring, "load", 4) == 0) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overread"
