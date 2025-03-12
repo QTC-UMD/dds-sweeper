@@ -751,71 +751,24 @@ void get_memory_layout(uint sweep_mode) {
     switch (sweep_mode) {
         case 0:
             fast_serial_printf("Mode 0 - Single Steps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('frequency', '<u4'), ");
-            fast_serial_printf("('amplitude', '<u2'), ");
-            fast_serial_printf("('phase', '<u2'), ");
-            fast_serial_printf("('time', '<u4')");
             break;
         case 1:
             fast_serial_printf("Mode 1 - Amplitude Sweeps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('start_amplitude', '<u2'), ");
-            fast_serial_printf("('stop_amplitude', '<u2'), ");
-            fast_serial_printf("('delta', '<u2'), ");
-            fast_serial_printf("('rate', '<u1'), ");
-            fast_serial_printf("('time', '<u4')");
             break;
         case 2:
             fast_serial_printf("Mode 2 - Frequency Sweeps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('start_frequency', '<u4'), ");
-            fast_serial_printf("('stop_frequency', '<u4'), ");
-            fast_serial_printf("('delta', '<u4'), ");
-            fast_serial_printf("('rate', '<u1'), ");
-            fast_serial_printf("('time', '<u4')");
             break;
         case 3:
             fast_serial_printf("Mode 3 - Phase Sweeps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('start_phase', '<u2'), ");
-            fast_serial_printf("('stop_phase', '<u2'), ");
-            fast_serial_printf("('delta', '<u2'), ");
-            fast_serial_printf("('rate', '<u1'), ");
-            fast_serial_printf("('time', '<u4')");
             break;
         case 4:
             fast_serial_printf("Mode 4 - Amplitude2 Sweeps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('start_amplitude', '<u2'), ");
-            fast_serial_printf("('stop_amplitude', '<u2'), ");
-            fast_serial_printf("'delta', '<u2'), ");
-            fast_serial_printf("('rate', '<u1'), ");
-            fast_serial_printf("('frequency', '<u4'), ");
-            fast_serial_printf("('phase', '<u2'), ");
-            fast_serial_printf("('time', '<u4')");
             break;
         case 5:
             fast_serial_printf("Mode 5 - Frequency2 Sweeps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('start_frequency', '<u4'), ");
-            fast_serial_printf("('stop_frequency', '<u4'), ");
-            fast_serial_printf("('delta', '<u4'), ");
-            fast_serial_printf("('rate', '<u1'), ");
-            fast_serial_printf("('amplitude', '<u2'), ");
-            fast_serial_printf("('phase', '<u2'), ");
-            fast_serial_printf("('time', '<u4')");
             break;
         case 6:
             fast_serial_printf("Mode 6 - Phase2 Sweeps\n");
-            fast_serial_printf("datatypes = np.dtype([");
-            fast_serial_printf("('start_phase', '<u2'), ");
-            fast_serial_printf("('stop_phase', '<u2'), ");
-            fast_serial_printf("'delta, '<u2'), ");
-            fast_serial_printf("('rate, '<u1'), ");  
-            fast_serial_printf("('frequency', '<u4'), ");  
-            fast_serial_printf("('amplitude', '<u2'), ");  
-            fast_serial_printf("('time', '<u4')");  
             break;
         default:
             fast_serial_printf("Couldn't find mode info\n");
