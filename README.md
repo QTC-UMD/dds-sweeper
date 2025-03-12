@@ -208,35 +208,17 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
         `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
 
 * `setb <start address:int> <instruction count:int>`:  
-Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent, and helpful numpy datatypes for structured arrays are included below:  
-  - Single Stepping (mode 0): `<frequency:int 32> <amplitude:int 16> <phase:int 16>`. Total of 8 bytes per channel per instruction.
-    - `datatypes = np.dtype([('frequency', '<u4'), ('amplitude', '<u2'), ('phase', '<u2')])`
-  - Single Stepping (mode 0) with timing: `<frequency:int 32> <amplitude:int 16> <phase:int 16> <time: int 32>`. Total of 12 bytes per channel per instruction.
-    - `datatypes = np.dtype([('frequency', '<u4'), ('amplitude', '<u2'), ('phase', '<u2'), ('time', '<u4')])`
-  - Amplitude Sweeps (mode 1): `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8>`. Total of 7 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_amplitude', '<u2'), ('stop_amplitude', '<u2'), ('delta', '<u2'), ('rate', '<u1')])`
-  - Amplitude Sweeps (mode 1) with timing: `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8> <time:int 32>`. Total of 11 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_amplitude', '<u2'), ('stop_amplitude', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('time', '<u4')])`
-  - Frequency Sweeps (mode 2): `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8>`. Total of 13 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_frequency', '<u4'), ('stop_frequency', '<u4'), ('delta', '<u4'), ('rate', '<u1')])`
-  - Frequency Sweeps (mode 2) with timing: `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8> <time:int 32>`. Total of 17 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_frequency', '<u4'), ('stop_frequency', '<u4'), ('delta', '<u4'), ('rate', '<u1'), ('time', '<u4')])`
-  - Phase Sweeps (mode 1): `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8>`. Total of 7 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_phase', '<u2'), ('stop_phase', '<u2'), ('delta', '<u2'), ('rate', '<u1')])`
-  - Phase Sweeps (mode 1) with timing: `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8> <time:int 32>`. Total of 11 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_phase', '<u2'), ('stop_phase', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('time', '<u4')])`
-  - Amplitude Sweep and Single Stepping (mode 4): `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <phase:int 16>`. Total of 13 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_amplitude', '<u2'), ('stop_amplitude', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('frequency', '<u4'), ('phase', '<u2')])`
-  - Amplitude Sweep and Single Stepping (mode 4) with timing: `<start amplitude:int 16> <stop amplitude:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <phase:int 16> <time:int 32>`. Total of 17 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_amplitude', '<u2'), ('stop_amplitude', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('frequency', '<u4'), ('phase', '<u2'), ('time', '<u4')])`
-  - Frequency Sweep and Single Stepping (mode 5): `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8> <amplitude:int 16> <phase:int 16>`. Total of 17 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_frequency', '<u4'), ('stop_frequency', '<u4'), ('delta', '<u4'), ('rate', '<u1'), ('amplitude', '<u2'), ('phase', '<u2')])`
-  - Frequency Sweep and Single Stepping (mode 5) with timing: `<start frequency:int 32> <stop frequency:int 32> <delta:int 32> <rate:int 8> <amplitude:int 16> <phase:int 16> <time:int 32>`. Total of 21 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_frequency', '<u4'), ('stop_frequency', '<u4'), ('delta', '<u4'), ('rate', '<u1'), ('amplitude', '<u2'), ('phase', '<u2'), ('time', '<u4')])`
-  - Phase Sweep and Single Stepping (mode 6): `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <amplitude:int 16>`. Total of 13 bytes per channel per instruction.  
-    - `datatypes = np.dtype([('start_phase', '<u2'), ('stop_phase', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('frequency', '<u4'), ('amplitude', '<u2')])`
-  - Phase Sweep and Single Stepping (mode 6) with timing: `<start phase:int 16> <stop phase:int 16> <delta:int 16> <rate:int 8> <frequency:int 32> <amplitude:int 16> <time:int 32>`. Total of 17 bytes per channel per instruction.
-    - `datatypes = np.dtype([('start_phase', '<u2'), ('stop_phase', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('frequency', '<u4'), ('amplitude', '<u2'), ('time', '<u4')])`
+Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent, and in the table below each mode is assumed to use external timing (with internal timing is in parentheses, in this case, append `, ('time', '<u4')` to the end of the np.dtype list)
+
+| Mode  | Bytes per channel per instruction  | np.dtype  |
+|---| :---: |:---:|
+| Single Stepping (mode 0)  | 8 (12) | `[('frequency', '<u4'), ('amplitude', '<u2'), ('phase', '<u2')]`  |
+| Amplitude Sweeps (mode 1)  | 7 (11) |  `[('start_amplitude', '<u2'), ('stop_amplitude', '<u2'), ('delta', '<u2'), ('rate', '<u1')]` |
+| Frequency Sweeps (mode 2) | 13 (17) |  `[('start_frequency', '<u4'), ('stop_frequency', '<u4'), ('delta', '<u4'), ('rate', '<u1')]` |
+| Phase Sweeps (mode 3)  | 7 (11) | `[('start_phase', '<u2'), ('stop_phase', '<u2'), ('delta', '<u2'), ('rate', '<u1')]` |
+| Amplitude Sweep and Single Stepping (mode 4) | 13 (17)  | `[('start_amplitude', '<u2'), ('stop_amplitude', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('frequency', '<u4'), ('phase', '<u2')]`  |
+| Frequency Sweep and Single Stepping (mode 5) | 17 (21) | `[('start_frequency', '<u4'), ('stop_frequency', '<u4'), ('delta', '<u4'), ('rate', '<u1'), ('amplitude', '<u2'), ('phase', '<u2')]`  |
+| Phase Sweep and Single Stepping (mode 6)  | 13 (17) | `[('start_phase', '<u2'), ('stop_phase', '<u2'), ('delta', '<u2'), ('rate', '<u1'), ('frequency', '<u4'), ('amplitude', '<u2')]`  |
 
 ### Flash commands
 
