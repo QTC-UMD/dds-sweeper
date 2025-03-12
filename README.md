@@ -10,7 +10,7 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 
 ## Specs
 
-- The timing capabilities of the DDS-Sweeper are tied to the number of clock cycles the pico takes to send the next instruciton.  
+- The timing capabilities of the DDS-Sweeper are tied to the number of clock cycles the pico takes to send the next instruction.  
 
 
 | Table Mode      | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
@@ -238,7 +238,7 @@ Retrieves the buffered execution table stored in nonvolatile memory and restores
 Turns on extra debug messages printed over serial. `state` should be `on` or `off` (no string quotes required).
 
 * `numtriggers`:  
-Responds with the nmumber of triggers processed since the last call of `start`
+Responds with the number of triggers processed since the last call of `start`
 
 * `program`:  
 Reboots the Pi Pico into firmware flashing mode. Serial will immediately disconnect and a mass storage device should appear.
