@@ -744,6 +744,36 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
 }
 
+void get_memory_layout(uint sweep_mode) {
+
+    fast_serial_printf("%d active channels\n", ad9959.channels);
+    switch (sweep_mode) {
+        case 0:
+            fast_serial_printf("Mode 0 - Single Steps\n");
+            break;
+        case 1:
+            fast_serial_printf("Mode 1 - Amplitude Sweeps\n");
+            break;
+        case 2:
+            fast_serial_printf("Mode 2 - Frequency Sweeps\n");
+            break;
+        case 3:
+            fast_serial_printf("Mode 3 - Phase Sweeps\n");
+            break;
+        case 4:
+            fast_serial_printf("Mode 4 - Amplitude2 Sweeps\n");
+            break;
+        case 5:
+            fast_serial_printf("Mode 5 - Frequency2 Sweeps\n");
+            break;
+        case 6:
+            fast_serial_printf("Mode 6 - Phase2 Sweeps\n");
+            break;
+        default:
+            fast_serial_printf("Couldn't find mode info\n");
+            return;
+    }
+}
 void get_instructions(void) {
     fast_serial_printf("Instruction Table Dump:\n"); // header
 
@@ -926,6 +956,8 @@ void loop() {
         flash_range_program(FLASH_TARGET_OFFSET, instructions, MAX_SIZE);
         restore_interrupts(ints);
         OK();
+    } else if (strncmp(readstring, "getmode", 7) == 0) {
+        get_memory_layout(ad9959.sweep_type);
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
 
