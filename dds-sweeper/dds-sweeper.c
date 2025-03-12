@@ -773,8 +773,7 @@ void get_memory_layout(uint sweep_mode) {
             fast_serial_printf("Couldn't find mode info\n");
             return;
     }
-    fast_serial_printf("])\n");
-  
+}
 void get_instructions(void) {
     fast_serial_printf("Instruction Table Dump:\n"); // header
 

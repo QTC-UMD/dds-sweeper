@@ -208,7 +208,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
         `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
 
 * `setb <start address:int> <instruction count:int>`:  
-Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent, and in the table below each mode is assumed to use external timing (with internal timing is in parentheses, in this case, append `, ('time', '<u4')` to the end of the np.dtype list)
+Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent, and in the table below each mode is assumed to use external timing (where internal timing bytes are in parentheses and the dtype list must have `, ('time', '<u4')` appended)
 
 | Mode  | Bytes per channel per instruction  | np.dtype  |
 |---| :---: |:---:|
