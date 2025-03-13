@@ -91,7 +91,14 @@ Note: Commands must be terminated with `\n`.
 Responds with a string containing the firmware version.
 
 * `status`:  
-Returns the opperating status of the DDS-Sweeper. `0` status indicates manual mode. `1` status indicates buffered execution. `2` status indicates aborting buffered execution.
+Returns the operating status of the DDS-Sweeper. 
+
+  - `0`: manual mode
+  - `1`: transitioning to buffered execution
+  - `2`: buffered execution
+  - `3`: aborting buffered execution
+  - `4`: last buffered execution was aborted
+  - `5`: transitioning to manual mode
 
 * `clkstatus`:
 Returns the clocking status of the DDS-Sweeper as three numbers: `<int:mode> <double:freq> <int:mult>`.
