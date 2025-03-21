@@ -793,17 +793,13 @@ void get_instructions(void) {
     fast_serial_printf("Instruction Table Dump:\n"); // header
 
     uint step = INS_SIZE * ad9959.channels + 1; // INS_SIZE changes for instruction type
-    uint num_ins = 0;
+    uint num_ins = stop_ins;
     uint32_t time_command;
 
-    // Count valid instructions
-    while (num_ins < MAX_SIZE / step) {
-        if (instructions[num_ins * step] == 0x00) {
-            break;
-        }
-        num_ins++;
+    if (num_ins == 0) {
+        fast_serial_printf("Instruction table does not contain a stop or repeat. Cannot print\n");
+        return
     }
-    fast_serial_printf("Loop: %d, stop_ins: %d\n", num_ins, stop_ins);
 
     // Loop through each instruction line to get raw bytes 
     for (uint i = 0; i < num_ins; i++) {
@@ -842,25 +838,18 @@ void background() {
         // pre-calculate spacing vars
         uint step = INS_SIZE * ad9959.channels + 1;
         uint offset = 0;
-
-        // count instructions to run
-        bool repeat = false;
-        int num_ins = 0;
         int i = 0;
-        while (true) {
-            // If an instruction is empty that means to stop
-            if (instructions[offset] == 0x00) {
-                if (instructions[offset + 1]) {
-                    repeat = true;
-                }
-                break;
-            }
-            offset = step * ++i;
-        }
-
-        num_ins = i;
-        offset = i = 0;
         triggers = 0;
+
+        // confirm a stop or repeat has been set in the instruction table
+        uint num_ins = stop_ins;
+        bool repeat = false;
+        if (num_ins == 0) {
+            fast_serial_printf("Instruction table does not contain a stop or repeat. Cannot execute!\n");
+            continue;
+        } else if (instructions[(num_ins * step) + 1]) {
+            repeat = true;
+        }
 
         // sync just to be sure
         sync();
