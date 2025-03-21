@@ -1,10 +1,10 @@
-## Sweeps
+# Sweeps
+
 - Setting up a sweep:  
 ![Sweep Setup Figure](img/sweep-setup.png)  
-Sweeps are defined by two parameters, sweep delta and ramp rate. 
+Sweeps are defined by two parameters, sweep delta and ramp rate.
 - Sweep Delta defines the change in output amplitude/frequency/phase on each sweep step
 - Ramp rate defines how often a sweep step is taken. It is based off of the AD9959's sync clock signal which will be one quarter of the AD9959's system clock. The ramp rate parameter specifies the number of sync clock cycles per sweep step. A ramp rate of 1 will cause the sweep delta to be applied every 1 sync clock cycle. For upward sweeps, the ramp rate parameter can have a value of 1-255. For downward sweeps the ramp rate can only be 1.  
-
 
 The time between sweep steps can be calculated with:
 $ t = \frac{\textrm{Ramp Rate}}{\textrm{Sync Clock}} $
@@ -13,20 +13,19 @@ For upward sweeps the time between sweeps can range from $\frac{1}{125 MHz} = 8 
 Downward sweeps will apply the sweep delta every $\frac{1}{125 MHz} = 8 ns$.  
 Given the frequency resolution of $\frac{f_{sys clk}}{2^{32}}$, the smallest sweep delta is $= \frac{1}{2^{32}} = 0.1164$ Hz. With the maximum ramp rates, the DDS-sweeper has a minimum sweeping rate of $\approx 47871$ Hz/sec when sweeping upwards or $\approx 12207031.25$ Hz/sec when sweeping downward.
 
+## Downward Sweeps
 
-### Downward Sweeps:
 Downward sweeps are not well supported by the AD9959, but they can still be done.
 The best method I have found for doing a downward sweep is to send the instructions via serial first, with the sweep autoclear bit set to active and the rising sweep tuning word set to the maximum.
 Then issue the IO_UPDATE signal while keeping the profile pin for that channel high.
-I belive this clears the sweep accumulator then quickly refills it with a max rate sweep before beginning the downward sweep. 
+I belive this clears the sweep accumulator then quickly refills it with a max rate sweep before beginning the downward sweep.
 Other combinations of autoclear bit active or not and timing of the profile pins seem to cause even more issues with downward sweeps.
 The biggest downside of this method is that you cannot slow down the downward sweep ramp rate as much as the upward sweep ramp rate.
 
-
 - Autoclear Accumulator Active, drop the pin after the update:  
-  Seems to work, you just cannot slow down downward sweeps. 
+  Seems to work, you just cannot slow down downward sweeps.
   ![Autoclear Accumulator Active, drop the pin after the update Closeup](img/profile-pin-drop-after.png)  
-  ![Autoclear Accumulator Active, drop the pin after the update Multiple Sweeps](img/noise-on-transition.png)   
+  ![Autoclear Accumulator Active, drop the pin after the update Multiple Sweeps](img/noise-on-transition.png)
 
 - Autoclear Accumulator Active, drop the pin before the update:  
   Downward sweeps just dont work at all.  
@@ -38,7 +37,7 @@ The biggest downside of this method is that you cannot slow down the downward sw
   ![no autoclear, drop pin before update: Closeup](img/no-auto-drop-before.png)  
   ![no autoclear, drop pin before update: Multiple Sweeps](img/consecutive-downs.png)  
 
-- no autoclear, drop pin after update:    
+- no autoclear, drop pin after update:
   A down sweep after an up sweep cannot cover a greater distance than the upward sweep  
   ![no autoclear, drop pin after update: Closeup](img/no-auto-drop-after.png)  
   ![no autoclear, drop pin after update: Multiple Sweeps](img/incomplete-sweep-after.png)  
