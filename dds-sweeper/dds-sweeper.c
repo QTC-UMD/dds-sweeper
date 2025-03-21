@@ -73,7 +73,6 @@ int clk_mode = INTERNAL;
 #define MAX_SIZE 245760
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
-uint stop_ins = 0; // stop/repeat being unset denoted by 0
 
 // minimum wait lengths
 #define WAITS_SS_PER 250
@@ -99,6 +98,7 @@ uint timer_dma;
 
 uint INS_SIZE = 0;
 uint8_t instructions[MAX_SIZE];
+uint stop_ins = 0; // stop/repeat being unset denoted by 0
 
 // bytes to encode an instruction in terms of sweep type
 // order is single step, amp, freq, phase, amp2, freq2, phase2
