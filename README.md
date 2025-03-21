@@ -69,7 +69,7 @@ Finally, the program can be executed using the `start` or `hwstart` commands. If
 
 - The frequency resolution of the AD9959 is $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\approx 0.1164$ Hz. Frequency input to the DDS Sweeper using the `set` command will be rounded to an integer multiple of the frequency resolution. Frequency input to the DDS Sweeper using the `seti` or `setb` commands will be in units of the frequency resolution.
 
-- The phase resolution of the AD9959 is $= \frac{360^\circ}{2^{14}} \approx 0.02197^\circ$. Phase offsets given using the `set` command will be rounded to a multiple of this resolution. Phase offets given using the `seti` or `setb` commands will be in units of this resolution.
+- The phase resolution of the AD9959 is $= \frac{360^\circ}{2^{14}} \approx 0.02197^\circ$. Phase offsets given using the `set` command will be rounded to a multiple of this resolution. Phase offsets given using the `seti` or `setb` commands will be in units of this resolution.
 
 - The amplitude resolution of the AD9959 is $= \frac{1}{2^{10}} \approx 0.09767\%$. Amplitude scale factors given using the `set` command will be rounded to a multiple of this resolution. Amplitude scale factors given using the `seti` or `setb` commands will be in units of this resolution.
 
@@ -128,7 +128,7 @@ Reconfigures the source/reference clock.
     In this mode, the frequency provided also sets the pico system clock
     and it cannot exceed 133 MHz.
     The dds sweeper defaults to this mode with a frequency of 125 MHz and a PLL multiplier of 4.
-  - Mode `1`: Sets the AD9959 to recieve a reference clock not from the pico.
+  - Mode `1`: Sets the AD9959 to receive a reference clock not from the pico.
     Setting this mode does not change the pico system clock.
 
   `pll_mult` is an optional input that sets the AD9959's PLL multiplier on the Reference Clock input. The default value is 4, giving the AD9959 a system clock of 500 MHz with the pico's 125 MHz reference. Valid values are 1 or 4-20.  
@@ -148,7 +148,7 @@ Configures what mode the DDS-Sweeper is operating in
   - 6: phase sweep with frequency/amplitude steps  
 
   The operating mode must be set before buffered execution instructions can be programmed into the DDS-Sweeper.  
-  A `trigger-source` of `0` means the Sweeper is expecting external triggers. A `trigger-source` of `1` means the Sweeper will send its own triggers and `set` commands will require an aditional `time` argument.
+  A `trigger-source` of `0` means the Sweeper is expecting external triggers. A `trigger-source` of `1` means the Sweeper will send its own triggers and `set` commands will require an additional `time` argument.
 
 ### Manual output commands
 
@@ -161,7 +161,7 @@ Manually set the output frequency of a specified channel. Channels are 0-3 and f
 Manually set the phase offset of a specified channel. Channels are 0-3 and offsets are in degrees. If `debug` is set to on, it will respond with the actual degree offset set. The Sweeper must be in manual mode.
 
 
-* `setamp <channel:int> <amplituce_scale_factor:float>`:  
+* `setamp <channel:int> <amplitude_scale_factor:float>`:  
 Manually set the amplitude scale factor of a specified channel. Channels are 0-3 and amplitude scale factors are a precentage of the maximum output voltage. If `debug` is set to on, it will respond with the actual frequency set. The Sweeper must be in manual mode.
 
 
@@ -174,7 +174,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
 
     `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
       - Amplitude Sweeps (mode 1)  
-        `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proprtion of the maximum output amplitude. `delta` is the desired change in that proprtion. For all three of those values there is a resolution of $\frac{1}{1024} \approx 0.09766\$
+        `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proportion of the maximum output amplitude. `delta` is the desired change in that proportion. For all three of those values there is a resolution of $\frac{1}{1024} \approx 0.09766\$
       - Frequency Sweeps (mode 2)  
         `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but they will be rounded to the nearest multiple of the frequency resolution.
       - Phase Sweeps (mode 3)
@@ -182,7 +182,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
 
   - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <secondary1:double> <secondary2:double> (<time:int>)`
 
-    These modes perform a linear sweep on one of the parameters, while simulaneously single stepping on the other two parameters.
+    These modes perform a linear sweep on one of the parameters, while simultaneously single stepping on the other two parameters.
       - Amplitude Sweeps (mode 4)  
         `secondary1` is the frequency, and `secondary2` is the phase offset.
       - Frequency Sweeps (mode 5)  
