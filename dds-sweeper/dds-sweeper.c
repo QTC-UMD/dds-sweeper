@@ -210,8 +210,7 @@ void abort_run() {
 // Set Table Instructions
 // =============================================================================
 
-void set_time(uint32_t addr, uint32_t time, int sweep_type, uint channels) {
-    uint32_t cycles = time;
+void set_time(uint32_t addr, uint32_t cycles, int sweep_type, uint channels) {
 
     if (sweep_type == SS_MODE) {
         // single stepping
@@ -356,15 +355,15 @@ void set_single_step_ins(uint addr, uint channel,
 }
 
 void set_single_step_ins_from_buffer(uint addr, uint channel, char * buffer){
-    uint32_t ftw, time;
+    uint32_t ftw, cycles;
     uint16_t asf, pow;
     memcpy(&ftw, &(buffer[0]), 4);
     memcpy(&asf, &(buffer[4]), 2);
     memcpy(&pow, &(buffer[6]), 2);
     set_single_step_ins(addr, channel, ftw, pow, asf);
     if (timing) {
-        memcpy(&time, &(buffer[8]), 4);
-        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+        memcpy(&cycles, &(buffer[8]), 4);
+        set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
     }
 }
 
@@ -445,7 +444,7 @@ void set_amp_sweep_ins(uint addr, uint channel, uint16_t asf_start, uint16_t asf
 }
 
 void set_amp_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
-    uint32_t ftw, time;
+    uint32_t ftw, cycles;
     uint16_t asf_start, asf_end, delta, pow;
     uint8_t rate;
     memcpy(&asf_start, &(buffer[0]), 2);
@@ -459,11 +458,11 @@ void set_amp_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     set_amp_sweep_ins(addr, channel, asf_start, asf_end, delta, rate, ftw, pow);
     if (timing) {
         if (ad9959.sweep_type == AMP2_MODE) {
-            memcpy(&time, &(buffer[13]), 4);
+            memcpy(&cycles, &(buffer[13]), 4);
         } else {
-            memcpy(&time, &(buffer[7]), 4);
+            memcpy(&cycles, &(buffer[7]), 4);
         }
-        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+        set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
     }
 }
 
@@ -577,7 +576,7 @@ void set_freq_sweep_ins(uint addr, uint channel, uint32_t ftw_start, uint32_t ft
 }
 
 void set_freq_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
-    uint32_t ftw_start, ftw_end, delta, time;
+    uint32_t ftw_start, ftw_end, delta, cycles;
     uint16_t asf, pow;
     uint8_t rate;
     memcpy(&ftw_start, &(buffer[0]), 4);
@@ -591,11 +590,11 @@ void set_freq_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     set_freq_sweep_ins(addr, channel, ftw_start, ftw_end, delta, rate, asf, pow);
     if (timing) {
         if (ad9959.sweep_type == FREQ2_MODE) {
-            memcpy(&time, &(buffer[17]), 4);
+            memcpy(&cycles, &(buffer[17]), 4);
         } else {
-            memcpy(&time, &(buffer[13]), 4);
+            memcpy(&cycles, &(buffer[13]), 4);
         }
-        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+        set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
     }
 }
 
@@ -698,7 +697,7 @@ void set_phase_sweep_ins(uint addr, uint channel, uint16_t pow_start, uint16_t p
 }
 
 void set_phase_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
-    uint32_t ftw, time;
+    uint32_t ftw, cycles;
     uint16_t asf, pow_start, pow_end, delta;
     uint8_t rate;
     memcpy(&pow_start, &(buffer[0]), 2);
@@ -712,11 +711,11 @@ void set_phase_sweep_ins_from_buffer(uint addr, uint channel, char * buffer){
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
     if (timing) {
         if (ad9959.sweep_type == PHASE2_MODE) {
-            memcpy(&time, &(buffer[13]), 4);
+            memcpy(&cycles, &(buffer[13]), 4);
         } else {
-            memcpy(&time, &(buffer[7]), 4);
+            memcpy(&cycles, &(buffer[7]), 4);
         }
-        set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+        set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
     }
 }
 
@@ -1136,9 +1135,9 @@ void loop() {
     } else if (strncmp(readstring, "set ", 4) == 0) {
         if (ad9959.sweep_type == SS_MODE) {
             // SINGLE TONE MODE
-            uint32_t channel, addr, time;
-            double freq, amp, phase;
-            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr, &freq,
+            uint32_t channel, addr;
+            double freq, amp, phase, time;
+            int parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %lf", &channel, &addr, &freq,
                                 &amp, &phase, &time);
 
             if (parsed == 1) {
@@ -1152,7 +1151,7 @@ void loop() {
             } else if (channel < 4 && ((timing && parsed < 6) || (!timing && parsed < 5))) {
                 fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> <frequency:double> "
-                    "<amplitude:double> <phase:double> (<time:int>)\n");
+                    "<amplitude:double> <phase:double> (<time:float>)\n");
             } else {
                 // At this point, parsing tests have been passed
                 if (channel == 4) {
@@ -1183,7 +1182,12 @@ void loop() {
 
                         set_single_step_ins(addr, channel, ftw, pow, asf);
                         if (timing) {
-                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                            uint32_t cycles;
+                            time = get_time(&ad9959, time, &cycles);
+                            set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
+                            if (DEBUG) {
+                                fast_serial_printf("\ttime: %9lf s\n", time);
+                            }
                         }
                     }
                 }
@@ -1192,8 +1196,8 @@ void loop() {
             OK();
         } else {
             // Sweep mode
-            uint32_t channel, addr, time;
-            double start, end, sweep_rate, other1, other2;
+            uint32_t channel, addr;
+            double start, end, sweep_rate, other1, other2, time;
             int parsed = 0;
 
             bool sweep_step_mode = ad9959.sweep_type == AMP2_MODE
@@ -1201,10 +1205,10 @@ void loop() {
                 || ad9959.sweep_type == PHASE2_MODE;
 
             if (sweep_step_mode) {
-                parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %lf %lf %u", &channel, &addr, &start,
+                parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %lf %lf %lf", &channel, &addr, &start,
                                 &end, &sweep_rate, &other1, &other2, &time);
             } else {
-                parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %u", &channel, &addr, &start,
+                parsed = sscanf(readstring, "%*s %u %u %lf %lf %lf %lf", &channel, &addr, &start,
                                 &end, &sweep_rate, &time);
             }
 
@@ -1224,7 +1228,7 @@ void loop() {
                 fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> <sweep rate:double> "
-                    "<time:int>\n");
+                    "<time:float>\n");
             } else if (!timing && sweep_step_mode && channel < 4 && parsed < 7) {
                 fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
@@ -1234,7 +1238,7 @@ void loop() {
                 fast_serial_printf(
                     "Missing Argument - expected: set <channel:int> <addr:int> "
                     "<start_point:double> <end_point:double> "
-                    "<sweep rate:double> <other1> <other2> <time:int>\n");
+                    "<sweep rate:double> <other1> <other2> <time:float>\n");
             } else {
                 // At this point, parsing tests have been passed
 
@@ -1266,7 +1270,12 @@ void loop() {
                                 "instructions can be set\n");
                         }
                         if (timing) {
-                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                            uint32_t cycles;
+                            time = get_time(&ad9959, time, &cycles);
+                            set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
+                            if (DEBUG) {
+                                fast_serial_printf("\ttime: %9lf s\n", time);
+                            }
                         }
                     }
                 }
@@ -1278,10 +1287,10 @@ void loop() {
         // Set instructions from integers
         if (ad9959.sweep_type == SS_MODE) {
             // SINGLE TONE MODE
-            uint32_t channel, addr, time, ftw;
+            uint32_t channel, addr, cycles, ftw;
             uint16_t asf, pow;
             int parsed = sscanf(readstring, "%*s %u %u %u %u %u %u", &channel, &addr, &ftw,
-                                &asf, &pow, &time);
+                                &asf, &pow, &cycles);
 
             if (parsed == 1) {
                 fast_serial_printf("Missing Argument - expected: set <channel:int> ... \n");
@@ -1319,7 +1328,7 @@ void loop() {
 
                         set_single_step_ins(addr, channel, ftw, pow, asf);
                         if (timing) {
-                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                            set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
                         }
                     }
                 }
@@ -1328,7 +1337,7 @@ void loop() {
             OK();
         } else {
             // Sweep mode
-            uint32_t channel, addr, time, start, end, delta, rate, other1, other2;
+            uint32_t channel, addr, cycles, start, end, delta, rate, other1, other2;
             int parsed = 0;
 
             bool sweep_step_mode = ad9959.sweep_type == AMP2_MODE
@@ -1337,10 +1346,10 @@ void loop() {
 
             if (sweep_step_mode) {
                 parsed = sscanf(readstring, "%*s %u %u %u %u %u %u %u %u %u", &channel, &addr, &start,
-                                &end, &delta, &rate, &other1, &other2, &time);
+                                &end, &delta, &rate, &other1, &other2, &cycles);
             } else {
                 parsed = sscanf(readstring, "%*s %u %u %u %u %u %u %u", &channel, &addr, &start,
-                                &end, &delta, &rate, &time);
+                                &end, &delta, &rate, &cycles);
             }
             fast_serial_printf("%d\n", parsed);
 
@@ -1402,7 +1411,7 @@ void loop() {
                                 "instructions can be set\n");
                         }
                         if (timing) {
-                            set_time(addr, time, ad9959.sweep_type, ad9959.channels);
+                            set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
                         }
                     }
                 }
