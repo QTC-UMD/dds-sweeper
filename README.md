@@ -73,6 +73,8 @@ Finally, the program can be executed using the `start` or `hwstart` commands. If
 
 - The amplitude resolution of the AD9959 is $= \frac{1}{2^{10}} \approx 0.09767\%$. Amplitude scale factors given using the `set` command will be rounded to a multiple of this resolution. Amplitude scale factors given using the `seti` or `setb` commands will be in units of this resolution.
 
+- When the DDS Sweeper uses internal timing to execute instructions, that time is based on the number of clock cycles of the Pico's system clock (which defaults to 125 MHz for an 8 ns period). Timing inputs using the `set` command are given in seconds and will be rounded to an integer multiple of the Pico system clock period. Timing input using the `seti` or `setb` commands is defined to be in units of the Pico system clock period.
+
 ## Sweeps
 - Setting up a sweep:  
 ![Sweep Setup Figure](img/sweep-setup.png)  
@@ -169,8 +171,8 @@ Manually set the amplitude scale factor of a specified channel. Channels are 0-3
 
 * `set`:  
 Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in. If `Debug` is set to `on` it will respond with the actual values set for that instruction.
-  - Single Stepping (mode 0): `set <channel:int> <addr:int> <frequency:float> <amplitude:float> <phase:float> (<time:int>)`
-  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> (<time:int>)`
+  - Single Stepping (mode 0): `set <channel:int> <addr:int> <frequency:float> <amplitude:float> <phase:float> (<time:float>)`
+  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> (<time:float>)`
 
     `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
       - Amplitude Sweeps (mode 1)  
@@ -180,7 +182,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
       - Phase Sweeps (mode 3)
         `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
 
-  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <secondary1:double> <secondary2:double> (<time:int>)`
+  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <secondary1:double> <secondary2:double> (<time:float>)`
 
     These modes perform a linear sweep on one of the parameters, while simulaneously single stepping on the other two parameters.
       - Amplitude Sweeps (mode 4)  
