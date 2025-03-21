@@ -73,6 +73,7 @@ int clk_mode = INTERNAL;
 #define MAX_SIZE 245760
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
+uint stop_ins = 0; // stop/repeat being unset denoted by 0
 
 // minimum wait lengths
 #define WAITS_SS_PER 250
@@ -261,6 +262,7 @@ bool set_repeat_instruction(uint addr){
     }
     instructions[offset] = 0x00;
     instructions[offset+1] = 0xff;
+    stop_ins = addr;  // update stop instruction
     return true;
 }
 
@@ -271,7 +273,16 @@ bool set_stop_instruction(uint addr){
     }
     instructions[offset] = 0x00;
     instructions[offset+1] = 0x00;
+    stop_ins = addr;  // update stop instruction
     return true;
+}
+
+void stop_ins_check(uint addr){
+    // check if instruction overwrites the current stop instruction
+    if (stop_ins != 0 && stop_ins == addr){
+        // reset cached stop instruction address
+        stop_ins = 0;
+    }
 }
 
 void set_ins_csr(uint8_t * ins, uint channel){
@@ -792,6 +803,7 @@ void get_instructions(void) {
         }
         num_ins++;
     }
+    fast_serial_printf("Loop: %d, stop_ins: %d\n", num_ins, stop_ins);
 
     // Loop through each instruction line to get raw bytes 
     for (uint i = 0; i < num_ins; i++) {
@@ -1164,6 +1176,7 @@ void loop() {
                         fast_serial_printf("Insufficient space for repeat instruction\n");
                     }
                 } else {
+                    stop_ins_check(addr);
                     int ins_offset = get_offset(channel, addr);
                     if(ins_offset < 0) {
                         fast_serial_printf("Insufficient space for instruction\n");
@@ -1247,6 +1260,7 @@ void loop() {
                         fast_serial_printf("Insufficient space for repeat instruction\n");
                     }
                 } else {
+                    stop_ins_check(addr);
                     int ins_offset = get_offset(channel, addr);
                     if(ins_offset < 0) {
                         fast_serial_printf("Insufficient space for instruction\n");
@@ -1306,6 +1320,7 @@ void loop() {
                         fast_serial_printf("Insufficient space for repeat instruction\n");
                     }
                 } else {
+                    stop_ins_check(addr);
                     int ins_offset = get_offset(channel, addr);
                     if(ins_offset < 0) {
                         fast_serial_printf("Insufficient space for instruction\n");
@@ -1383,6 +1398,7 @@ void loop() {
                         fast_serial_printf("Insufficient space for repeat instruction\n");
                     }
                 } else {
+                    stop_ins_check(addr);
                     int ins_offset = get_offset(channel, addr);
                     if(ins_offset < 0) {
                         fast_serial_printf("Insufficient space for instruction\n");
@@ -1420,7 +1436,10 @@ void loop() {
         } else if (get_offset(0, start_addr + ins_count) < 0) {
             fast_serial_printf("Insufficient space for instructions\n");
         } else {
-
+            // invalidate stop_ins if current stop instruction will be overwritten
+            if (stop_ins <= start_addr + ins_count){
+                stop_ins = 0;
+            }
             uint bytes_per_ins = BYTES_PER_INS[ad9959.sweep_type];
 
             if (bytes_per_ins > 0) {
