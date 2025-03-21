@@ -1185,7 +1185,7 @@ void loop() {
                             time = get_time(&ad9959, time, &cycles);
                             set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
                             if (DEBUG) {
-                                fast_serial_printf("\ttime: %9lf s\n", time);
+                                fast_serial_printf("\ttime: %.3g s\n", time);
                             }
                         }
                     }
@@ -1273,7 +1273,7 @@ void loop() {
                             time = get_time(&ad9959, time, &cycles);
                             set_time(addr, cycles, ad9959.sweep_type, ad9959.channels);
                             if (DEBUG) {
-                                fast_serial_printf("\ttime: %9lf s\n", time);
+                                fast_serial_printf("\ttime: %.3g s\n", time);
                             }
                         }
                     }
