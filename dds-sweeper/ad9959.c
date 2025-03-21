@@ -30,7 +30,7 @@ double get_pow(double phase, uint16_t* pow) {
     // make sure pow is within range?
     *pow = *pow % 16383;
 
-    return *pow / 16383.0 * 360.0;
+    return *pow / 16383.0 * 360.0
 }
 
 void load_acr(uint16_t asf, uint8_t* buf) {
