@@ -334,7 +334,7 @@ void set_single_step_ins(uint addr, uint channel,
 
     // Memory Map (12 bytes)
     // [ 0x00, CSR                      *Channel Select Register
-    //   0x04, FTW3, FTW2, FTW1, FTW0,  *Frequcney Tuning Word
+    //   0x04, FTW3, FTW2, FTW1, FTW0,  *Frequency Tuning Word
     //   0x05, POW1, POW0,              *Phase Offset Word
     //   0x06, ACR2, ACR1, ACR0         *Amplitude Control Register
     // ]
@@ -871,7 +871,7 @@ void background() {
             // prime PIO
             pio_sm_put(PIO_TRIG, 0, instructions[offset]);
 
-            // send new instruciton to AD9959
+            // send new instruction to AD9959
             spi_write_blocking(SPI, instructions + offset + 1, step - 1);
 
             // if on the first instruction, begin the timer
@@ -1541,7 +1541,7 @@ int main() {
     // output sys clock on a gpio pin to be used as REF_CLK for AD9959
     clock_gpio_init(PIN_CLOCK, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, 1);
 
-    // attatch spi to system clock so it runs at max rate
+    // attach spi to system clock so it runs at max rate
     clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 125 * MHZ,
                     125 * MHZ);
 

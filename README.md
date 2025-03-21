@@ -208,7 +208,7 @@ Sets the value of instruction number `addr` for channel `channel` (zero indexed)
 
   - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:int> <end_point:int> <delta:int> <ramp-rate:int> <secondary1:int> <secondary2:int> (<time:int>)`
 
-    These modes perform a linear sweep on one of the parameters, while simulaneously single stepping on the other two parameters.
+    These modes perform a linear sweep on one of the parameters, while simultaneously single stepping on the other two parameters.
       - Amplitude Sweeps (mode 4)  
         `secondary1` is the frequency, and `secondary2` is the phase offset.
       - Frequency Sweeps (mode 5)  
