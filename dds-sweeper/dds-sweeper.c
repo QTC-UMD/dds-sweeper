@@ -798,7 +798,7 @@ void get_instructions(void) {
 
     if (num_ins == 0) {
         fast_serial_printf("Instruction table does not contain a stop or repeat. Cannot print\n");
-        return
+        return;
     }
 
     // Loop through each instruction line to get raw bytes 
