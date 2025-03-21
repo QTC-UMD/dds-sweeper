@@ -93,6 +93,7 @@ typedef struct ad9959_config {
 double get_asf(double amp, uint16_t* asf);
 double get_ftw(ad9959_config* c, double freq, uint32_t* ftw);
 double get_pow(double phase, uint16_t* pow);
+double get_time(ad9959_config* c, double time, uint32_t* cycles);
 
 void load_acr(uint16_t asf, uint8_t* buf);
 void load_ftw(uint32_t ftw, uint8_t* buf);
