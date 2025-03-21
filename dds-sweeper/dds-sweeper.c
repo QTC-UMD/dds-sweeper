@@ -1095,7 +1095,6 @@ void loop() {
             } else {
                 set_ref_clk(&ad9959, freq);
                 gpio_deinit(PIN_CLOCK);
-                if (DEBUG) fast_serial_printf("AD9959 requires external reference clock\n");
             }
             // Set new mult if provided
             if (parsed == 3) {
@@ -1319,12 +1318,6 @@ void loop() {
                     if(ins_offset < 0) {
                         fast_serial_printf("Insufficient space for instruction\n");
                     } else {
-                        if (DEBUG) {
-                            fast_serial_printf(
-                                "Set ins #%d for channel %d with asf: %d "
-                                "ftw: %d pow: %d\n",
-                                addr, channel, asf, ftw, pow);
-                        }
 
                         set_single_step_ins(addr, channel, ftw, pow, asf);
                         if (timing) {

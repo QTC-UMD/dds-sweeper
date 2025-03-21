@@ -238,7 +238,7 @@ Retrieves the buffered execution table stored in nonvolatile memory and restores
 ### Debugging commands
 
 * `debug <state:str>`:  
-Turns on extra debug messages printed over serial. `state` should be `on` or `off` (no string quotes required).
+Turns on extra debug messages printed over serial. `state` should be `on` or `off` (no string quotes required). On by default.
 
 * `numtriggers`:  
 Responds with the number of triggers processed since the last call of `start`
