@@ -33,11 +33,11 @@ double get_pow(double phase, uint16_t* pow) {
     return *pow / 16383.0 * 360.0;
 }
 
-double get_time(ad9959_config* c, double time, uint32_t* periods) {
-    *periods = round(time / c->ref_clk);
+double get_time(ad9959_config* c, double time, uint32_t* cycles) {
+    *cycles = round(time / c->ref_clk);
 
     // return time that was able to be set
-    return *periods * c->ref_clk
+    return *cycles * c->ref_clk;
 }
 
 void load_acr(uint16_t asf, uint8_t* buf) {
