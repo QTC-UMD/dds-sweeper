@@ -45,8 +45,11 @@ static mutex_t wait_mutex;
 
 // STATUS flag
 #define STOPPED 0
-#define RUNNING 1
-#define ABORTING 2
+#define TRANSITION_TO_RUNNING 1
+#define RUNNING 2
+#define ABORTING 3
+#define ABORTED 4
+#define TRANSITION_TO_STOPPED 5
 int status = STOPPED;
 
 // modes
@@ -191,7 +194,8 @@ void wait(uint channel) {
 }
 
 void abort_run() {
-    if (get_status() == RUNNING) {
+    int local_status = get_status();
+    if (local_status == RUNNING || local_status == TRANSITION_TO_RUNNING) {
         set_status(ABORTING);
 
         // Make trigger PIO trigger immediately so background aborts
@@ -823,8 +827,6 @@ void background() {
         // wait for a start command
         hwstart = multicore_fifo_pop_blocking();
 
-        set_status(RUNNING);
-
         // pre-calculate spacing vars
         uint step = INS_SIZE * ad9959.channels + 1;
         uint offset = 0;
@@ -851,6 +853,7 @@ void background() {
         // sync just to be sure
         sync();
 
+        set_status(RUNNING);
         // if this is hwstart, stell the timer pio core and it will handle that on its own
         if (hwstart) {
             pio_sm_put(PIO_TIME, 0, 0);
@@ -884,10 +887,19 @@ void background() {
         }
 
         // clean up
-        dma_channel_abort(timer_dma);
-        pio_sm_clear_fifos(PIO_TRIG, 0);
-        pio_sm_clear_fifos(PIO_TIME, 0);
-        set_status(STOPPED);
+        if (get_status() == ABORTING) {
+            set_status(TRANSITION_TO_STOPPED);
+            dma_channel_abort(timer_dma);
+            pio_sm_clear_fifos(PIO_TRIG, 0);
+            pio_sm_clear_fifos(PIO_TIME, 0);
+            set_status(ABORTED);
+        } else {
+            set_status(TRANSITION_TO_STOPPED);
+            dma_channel_abort(timer_dma);
+            pio_sm_clear_fifos(PIO_TRIG, 0);
+            pio_sm_clear_fifos(PIO_TIME, 0);
+            set_status(STOPPED);
+        }
     }
 }
 
@@ -929,11 +941,11 @@ void loop() {
     // ====================================================
     // Stuff that cannot be done while the table is running
     // ====================================================
-    else if (local_status != STOPPED) {
+    else if (local_status != STOPPED && local_status != ABORTED) {
         fast_serial_printf(
             "Cannot execute command \"%s\" during buffered execution. Check "
-            "status first and wait for it to return %d (stopped or aborted).\n",
-            readstring, STOPPED);
+            "status first and wait for it to return stopped (%d) or aborted (%d).\n",
+            readstring, STOPPED, ABORTED);
     } else if (strncmp(readstring, "readregs", 8) == 0) {
         single_step_mode();
         update();
@@ -1483,6 +1495,7 @@ void loop() {
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");
         } else {
+            set_status(TRANSITION_TO_RUNNING);
             pio_sm_clear_fifos(PIO_TRIG, 0);
             pio_sm_clear_fifos(PIO_TIME, 0);
 
@@ -1496,6 +1509,7 @@ void loop() {
                 "Invalid Command - \'mode\' must be defined before "
                 "a table can be started\n");
         } else {
+            set_status(TRANSITION_TO_RUNNING);
             pio_sm_clear_fifos(PIO_TRIG, 0);
             pio_sm_clear_fifos(PIO_TIME, 0);
 
