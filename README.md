@@ -1,4 +1,5 @@
 # dds-sweeper
+
 Raspberry Pi Pico interface for the AD9959 DDS.
 
 If you use this project, please cite as:
@@ -7,11 +8,9 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 *Review of Scientific Instruments*, **94**, 094705 (2023)
 [https://doi.org/10.1063/5.0163342](https://doi.org/10.1063/5.0163342)
 
-
 ## Specs
 
 - The timing capabilities of the DDS-Sweeper are tied to the number of clock cycles the pico takes to send the next instruction.  
-
 
 | Table Mode      | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------|-----------|-----------|-----------|-----------|
@@ -20,15 +19,12 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 
 - At the default Pico Clock frequency of 125 MHz those clock cycle counts correspond to the following times:  
 
-
 | Table Mode      | 1 Channel | 2 Channel  | 3 Channel  | 4 Channel  |
 |-----------------|-----------|------------|------------|------------|
 | Single Stepping | 4 $\mu s$ | 6  $\mu s$ | 8  $\mu s$ | 10 $\mu s$ |
 | Sweep Mode      | 8 $\mu s$ | 12 $\mu s$ | 16 $\mu s$ | 20 $\mu s$ |
 
-
 - The number of instructions you can store in the table depends no the type of sweep being performed and the number of channels being used.  
-
 
 | Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------------------|-----------|-----------|-----------|-----------|
@@ -38,6 +34,7 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 | Sweep Mode (Ext Timer)      | 8327      | 4234      | 2838      | 2135      |
 
 ## How to flash the firmware
+
 Download the latest [dds-sweeper.uf2 file](https://github.com/QTC-UMD/dds-sweeper/releases/latest/download/dds-sweeper.uf2).
 On your Raspberry Pi Pico, hold down the "bootsel" button while plugging the Pico into USB port on a PC (that must already be turned on).
 The Pico should mount as a mass storage device (if it doesn't, try again or consult the Pico documentation).
@@ -65,6 +62,7 @@ Once setup is complete, instructions (steps or sweeps, depending on the mode) an
 Finally, the program can be executed using the `start` or `hwstart` commands. If termination of the program is required before it reaches a `stop` command, the `abort` command can be used.
 
 ## DDS Units
+
 - Output Amplitude is dependent on frequency (some people on Analog Devices forum mentioned amplitude and frequency are related by a sinc function)
 
 - The frequency resolution of the AD9959 is $= \frac{f_{sys clk}}{2^{32}}$. At the default system clock of 500 MHz, the frequency resolution is $\approx 0.1164$ Hz. Frequency input to the DDS Sweeper using the `set` command will be rounded to an integer multiple of the frequency resolution. Frequency input to the DDS Sweeper using the `seti` or `setb` commands will be in units of the frequency resolution.
@@ -76,24 +74,26 @@ Finally, the program can be executed using the `start` or `hwstart` commands. If
 - When the DDS Sweeper uses internal timing to execute instructions, that time is based on the number of clock cycles of the Pico's system clock (which defaults to 125 MHz for an 8 ns period). Timing inputs using the `set` command are given in seconds and will be rounded to an integer multiple of the Pico system clock period. Timing input using the `seti` or `setb` commands is defined to be in units of the Pico system clock period.
 
 ## Sweeps
+
 - Setting up a sweep:  
 ![Sweep Setup Figure](img/sweep-setup.png)  
-Sweeps are defined by two parameters, sweep delta and ramp rate. 
+Sweeps are defined by two parameters, sweep delta and ramp rate.
 - Sweep Delta defines the change in output amplitude/frequency/phase on each sweep step
 - Ramp rate defines how often a sweep step is taken. It is based off of the AD9959's sync clock signal which will be one quarter of the AD9959's system clock. The ramp rate parameter specifies the number of sync clock cycles per sweep step. A ramp rate of 1 will cause the sweep delta to be applied every 1 sync clock cycle. For upward sweeps, the ramp rate parameter can have a value of 1-255. For downward sweeps the ramp rate can only be 1.  
 
 For more details on sweeps, see [sweep details](SWEEP_DETAILS.md).
 
 ## Serial API
+
 Note: Commands must be terminated with `\n`.
 
 ### Status commands
 
-* `version`:  
+- `version`:  
 Responds with a string containing the firmware version.
 
-* `status`:  
-Returns the operating status of the DDS-Sweeper. 
+- `status`:  
+Returns the operating status of the DDS-Sweeper.
 
   - `0`: manual mode
   - `1`: transitioning to buffered execution
@@ -102,29 +102,29 @@ Returns the operating status of the DDS-Sweeper.
   - `4`: last buffered execution was aborted
   - `5`: transitioning to manual mode
 
-* `clkstatus`:
+- `clkstatus`:
 Returns the clocking status of the DDS-Sweeper as three numbers: `<int:mode> <double:freq> <int:mult>`.
 Mode can be `0` for internal clocking or `1` for external clocking of the AD9959.
 The frequency is the AD9959 reference frequency, in Hz.
-`mult` is the AD9959 PLL multiplier. The corresponding system frequency is `freq*mult`.
+`mult` is the AD9959 PLL multiplier. The corresponding system frequency is `freq*-*mult`.
 
-* `getfreqs`:  
+- `getfreqs`:  
 Responds with a multi-line string containing the current operating frequencies of various clocks (you will be most interested in `pll_sys` and `clk_sys`). Multiline string ends with `ok\n`.
 
 ### State commands
 
-* `start`:  
+- `start`:  
 Starts buffered execution immediately.
 
-* `hwstart`:  
+- `hwstart`:  
 Starts buffered execution once an external trigger is received.
 
-* `abort`:  
+- `abort`:  
 Stops buffered execution immediately.
 
 ### Setup commands
 
-* `setclock <mode:int> <freq:int> (<pll_mult:int>)`:  
+- `setclock <mode:int> <freq:int> (<pll_mult:int>)`:  
 Reconfigures the source/reference clock.
   - Mode `0`: Use pico system clock as reference to the AD9959.
     In this mode, the frequency provided also sets the pico system clock
@@ -136,10 +136,10 @@ Reconfigures the source/reference clock.
   `pll_mult` is an optional input that sets the AD9959's PLL multiplier on the Reference Clock input. The default value is 4, giving the AD9959 a system clock of 500 MHz with the pico's 125 MHz reference. Valid values are 1 or 4-20.  
   The AD9959's PLL has an output range of 100-160 MHz or 255-500 MHz with VCO gain enabled. The pico will automatically enable the VCO gain bit if the requested frequency is in the upper range. If trying to use the PLL multiplier to generate a frequency between 160 and 255 MHz, there is no guarantee of operation.
 
-* `setchannels <num:int>`:  
+- `setchannels <num:int>`:  
 Sets how many channels being used by the table mode. Uses the lowest channels first, starting with channel 0. If number of channels is set to `0`, buffered execution instructions will be written to all 4 channels simultaneously.
 
-* `mode <sweep-type:int> <trigger-source:int>`:  
+- `mode <sweep-type:int> <trigger-source:int>`:  
 Configures what mode the DDS-Sweeper is operating in
   - 0: single stepping / manual mode
   - 1: amplitude sweep
@@ -154,69 +154,64 @@ Configures what mode the DDS-Sweeper is operating in
 
 ### Manual output commands
 
-
-* `setfreq <channel:int> <frequency:float>`:  
+- `setfreq <channel:int> <frequency:float>`:  
 Manually set the output frequency of a specified channel. Channels are 0-3 and frequencies are in Hz. If `debug` is set to on, it will respond with the actual frequency set. The Sweeper must be in manual mode.
 
-
-* `setphase <channel:int> <phase_offset:float>`:  
+- `setphase <channel:int> <phase_offset:float>`:  
 Manually set the phase offset of a specified channel. Channels are 0-3 and offsets are in degrees. If `debug` is set to on, it will respond with the actual degree offset set. The Sweeper must be in manual mode.
 
-
-* `setamp <channel:int> <amplitude_scale_factor:float>`:  
+- `setamp <channel:int> <amplitude_scale_factor:float>`:  
 Manually set the amplitude scale factor of a specified channel. Channels are 0-3 and amplitude scale factors are a precentage of the maximum output voltage. If `debug` is set to on, it will respond with the actual frequency set. The Sweeper must be in manual mode.
-
 
 ### Data loading commands
 
-* `set`:  
+- `set`:  
 Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in. If `Debug` is set to `on` it will respond with the actual values set for that instruction.
   - Single Stepping (mode 0): `set <channel:int> <addr:int> <frequency:float> <amplitude:float> <phase:float> (<time:float>)`
   - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> (<time:float>)`
 
     `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
-      - Amplitude Sweeps (mode 1)  
-        `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proportion of the maximum output amplitude. `delta` is the desired change in that proportion. For all three of those values there is a resolution of $\frac{1}{1024} \approx 0.09766\$
-      - Frequency Sweeps (mode 2)  
-        `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but they will be rounded to the nearest multiple of the frequency resolution.
-      - Phase Sweeps (mode 3)
-        `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$). 
+    - Amplitude Sweeps (mode 1)  
+      `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proportion of the maximum output amplitude. `delta` is the desired change in that proportion. For all three of those values there is a resolution of $\frac{1}{1024} \approx 0.09766\$
+    - Frequency Sweeps (mode 2)  
+      `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but they will be rounded to the nearest multiple of the frequency resolution.
+    - Phase Sweeps (mode 3)
+      `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$).
 
   - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <secondary1:double> <secondary2:double> (<time:float>)`
 
-    These modes perform a linear sweep on one of the parameters, while simultaneously single stepping on the other two parameters.
-      - Amplitude Sweeps (mode 4)  
-        `secondary1` is the frequency, and `secondary2` is the phase offset.
-      - Frequency Sweeps (mode 5)  
-        `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
-      - Phase Sweeps (mode 6)  
-        `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
+  These modes perform a linear sweep on one of the parameters, while simultaneously single stepping on the other two parameters.
+  - Amplitude Sweeps (mode 4)  
+    `secondary1` is the frequency, and `secondary2` is the phase offset.
+  - Frequency Sweeps (mode 5)  
+    `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
+  - Phase Sweeps (mode 6)  
+    `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
 
-
-* `seti`:  
+- `seti`:  
 Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in. If `Debug` is set to `on` it will respond with the actual values set for that instruction. `seti` uses integer values (AD9959 units) rather than floating point values. Otherwise, it is the same as `set`.
   - Single Stepping (mode 0): `seti <channel:int> <addr:int> <frequency:int> <amplitude:int> <phase:int> (<time:int>)`
   - Sweep Mode (modes 1-3): `seti <channel:int> <addr:int> <start_point:int> <end_point:int> <delta:int> <ramp-rate:int> (<time:int>)`
 
     `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. `ramp-rate` is an additional divider that can applied to slow down the sweep clock further, must be in the range 1-255. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
-      - Amplitude Sweeps (mode 1)  
-        `start_point` and `end_point` should be integers between 0 and 1023 (inclusive).
-      - Frequency Sweeps (mode 2)  
-        `start_point`, `end_point`, and `delta` are integers between 0 and $2^{32} - 1$ in units of system clock rate (typically $500$ MHz) over $2^{32}$.
-      - Phase Sweeps (mode 3)
-        `start_point`, `end_point`, and `delta` are between 0 and 65535 (inclusive).
+    - Amplitude Sweeps (mode 1)  
+      `start_point` and `end_point` should be integers between 0 and 1023 (inclusive).
+    - Frequency Sweeps (mode 2)  
+      `start_point`, `end_point`, and `delta` are integers between 0 and $2^{32} - 1$ in units of system clock rate (typically $500$ MHz) over $2^{32}$.
+    - Phase Sweeps (mode 3)
+      `start_point`, `end_point`, and `delta` are between 0 and 65535 (inclusive).
 
   - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:int> <end_point:int> <delta:int> <ramp-rate:int> <secondary1:int> <secondary2:int> (<time:int>)`
 
     These modes perform a linear sweep on one of the parameters, while simultaneously single stepping on the other two parameters.
-      - Amplitude Sweeps (mode 4)  
-        `secondary1` is the frequency, and `secondary2` is the phase offset.
-      - Frequency Sweeps (mode 5)  
-        `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
-      - Phase Sweeps (mode 6)  
-        `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
+    - Amplitude Sweeps (mode 4)  
+      `secondary1` is the frequency, and `secondary2` is the phase offset.
+    - Frequency Sweeps (mode 5)  
+      `secondary1` is the amplitude scale factor, and `secondary2` is the phase offset.
+    - Phase Sweeps (mode 6)  
+      `secondary1` is the frequency, and `secondary2` is the amplitude scale factor.
 
-* `setb <start address:int> <instruction count:int>`:  
+- `setb <start address:int> <instruction count:int>`:  
 Bulk setting of instructions in binary. `start address` is the address of the first instruction loaded. `instruction count` instructions will be programmed. If there is not sufficient space for that many instructions, the response will be an error message. Otherwise, the response will be `ready for <byte count:int> bytes`, where `byte count` is the number of bytes the device is expecting. An array of instructions can then be transmitted. Note that all active channels are loaded together. The layout of the instruction array is mode dependent, and in the table below each mode is assumed to use external timing (where internal timing bytes are in parentheses and the dtype list must have `, ('time', '<u4')` appended)
 
 | Mode  | Bytes per channel per instruction  | np.dtype  |
@@ -231,21 +226,21 @@ Bulk setting of instructions in binary. `start address` is the address of the fi
 
 ### Flash commands
 
-* `save`:  
-Saves the buffered execution table to nonvolatile memory so that it can be recovered later (after a power cycle). 
+- `save`:  
+Saves the buffered execution table to nonvolatile memory so that it can be recovered later (after a power cycle).
 
-* `load`:  
+- `load`:  
 Retrieves the buffered execution table stored in nonvolatile memory and restores it to system memory so that it can be run. A saved table must be loaded before it can be run.
 
 ### Debugging commands
 
-* `debug <state:str>`:  
+- `debug <state:str>`:  
 Turns on extra debug messages printed over serial. `state` should be `on` or `off` (no string quotes required). On by default.
 
-* `numtriggers`:  
+- `numtriggers`:  
 Responds with the number of triggers processed since the last call of `start`
 
-* `program`:  
+- `program`:  
 Reboots the Pi Pico into firmware flashing mode. Serial will immediately disconnect and a mass storage device should appear.
 
 ## Compiling the firmware

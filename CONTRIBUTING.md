@@ -3,10 +3,11 @@
 ## Overview of structure
 
 The DDS Sweeper can be divided into four components:
+
 1. A serial interface to the host computer running on the first core.
 2. An SPI interface to the AD9959 running on the second core.
-4. A PIO program for internal triggering (referred to as "timing") the DDS Sweeper.
-3. A PIO program for sending triggers to the AD9959.
+3. A PIO program for internal triggering (referred to as "timing") the DDS Sweeper.
+4. A PIO program for sending triggers to the AD9959.
 
 ## Serial interface
 
@@ -26,17 +27,17 @@ Both are stored in the same array, but timing information is offset to be after 
 
 The `instructions` array (when all four channels are enabled by `setchannels`) thus contains
 
-```
-    [profile pin for address 0] [channel 0 instruction at address 0] [channel 1 instruction at address 0] ... [channel 3 instruction at address 0]
-    [profile pin for address 1] [channel 0 instruction at address 1] [channel 1 instruction at address 1] ... [channel 3 instruction at address 1]
-    ...
-    [profile pin for last address] [channel 0 instruction at last address] [channel 1 instruction at last address] ... [channel 3 instruction at last address]
-	0x00 [0x00 for stop or 0xFF for repeat]
-	...
-	[time for instruction at address 0]
-	[time for instruction at address 1]
-	...
-	[time for instruction at last address]
+```text
+[profile pin for address 0] [channel 0 instruction at address 0] [channel 1 instruction at address 0] ... [channel 3 instruction at address 0]
+[profile pin for address 1] [channel 0 instruction at address 1] [channel 1 instruction at address 1] ... [channel 3 instruction at address 1]
+...
+[profile pin for last address] [channel 0 instruction at last address] [channel 1 instruction at last address] ... [channel 3 instruction at last address]
+0x00 [0x00 for stop or 0xFF for repeat]
+...
+[time for instruction at address 0]
+[time for instruction at address 1]
+...
+[time for instruction at last address]
 ```
 
 The profile pin byte is used in sweep modes to determine which profile pins to trigger (although SPI instructions will be sent for all channels, some of these could be empty, in which case nothing would happen to those channels). In single step mode, it is simply set to a non-zero value to indicate the the program does not stop or repeat yet.
