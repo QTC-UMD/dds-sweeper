@@ -28,10 +28,10 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 
 | Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------------------|-----------|-----------|-----------|-----------|
-| Single Stepping             | 5000      | 5000      | 5000      | 4032      |
-| Sweep Mode                  | 5000      | 3895      | 2611      | 1964      |
 | Single Stepping (Ext Timer) | 16656     | 8615      | 5810      | 4383      |
 | Sweep Mode (Ext Timer)      | 8327      | 4234      | 2838      | 2135      |
+| Single Stepping (Int Timer) | 5000      | 5000      | 5000      | 4032      |
+| Sweep Mode (Int Timer)      | 5000      | 3895      | 2611      | 1964      |
 
 ## How to flash the firmware
 
