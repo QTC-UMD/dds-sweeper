@@ -71,6 +71,7 @@ int clk_mode = INTERNAL;
 #define UPDATE 0
 
 #define MAX_SIZE 245760
+// #define MAX_SIZE 240000
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
@@ -103,6 +104,10 @@ uint stop_ins = 0; // stop/repeat being unset denoted by 0
 // bytes to encode an instruction in terms of sweep type
 // order is single step, amp, freq, phase, amp2, freq2, phase2
 uint BYTES_PER_INS[] = {8, 7, 13, 7, 13, 17, 13};
+
+// instruction sizes after backend processing
+// order is single step, amp, freq, phase, amp2, freq2, phase2
+uint SIZE_EACH_INS[] = {14, 28, 29, 27, 36, 36, 36};
 
 // =============================================================================
 // Utility Functions
@@ -1117,8 +1122,7 @@ void loop() {
         } else if (type > PHASE2_MODE) {
             fast_serial_printf("Invalid Type - table type must be in range 0-6\n");
         } else {
-            uint8_t sizes[] = {14, 28, 29, 27, 36, 36, 36};
-            INS_SIZE = sizes[type];
+            INS_SIZE = SIZE_EACH_INS[type];
             ad9959.sweep_type = type;
             timing = _timing;
 
