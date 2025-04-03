@@ -71,7 +71,6 @@ int clk_mode = INTERNAL;
 #define UPDATE 0
 
 #define MAX_SIZE 245760
-// #define MAX_SIZE 240000
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
