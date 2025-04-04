@@ -24,7 +24,7 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 | Single Stepping | 4 $\mu s$ | 6  $\mu s$ | 8  $\mu s$ | 10 $\mu s$ |
 | Sweep Mode      | 8 $\mu s$ | 12 $\mu s$ | 16 $\mu s$ | 20 $\mu s$ |
 
-- The number of instructions you can store in the table depends no the type of sweep being performed and the number of channels being used. Note that these values were determined empirically and can be reobtained with the testing notebook `instruction-tests.ipynb`.
+- The number of instructions you can store in the table depends on the type of sweep being performed and the number of channels being used. Note that these values were determined empirically and can be reobtained with the testing notebook `instruction-tests.ipynb`.
 
 | Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------------------|-----------|-----------|-----------|-----------|
