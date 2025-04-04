@@ -211,118 +211,6 @@ void abort_run() {
     }
 }
 
-double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint32_t p_max, uint32_t q_max) {
-    // Approximates a double as a ratio of integers 
-    // using a modified continued fractions algorithm
-    // input = sweep_rate * 4 / (ad9959->ref_clk * ad9959->pll_mult)^2 * 4294967296; 
-
-    double eps = 0.00001; // later
-
-    uint32_t a0 = floor(f);
-    double r_old = f - a0;
-    uint32_t q_double_old = 0;
-    uint32_t p_double_old = 1;
-    uint32_t p_old = a0;
-    uint32_t q_old = 1;
-
-    uint32_t a_new, p_new, q_new;
-    double r_new;
-
-    uint num_iters = 100; 
-    for (uint i = 1; i < num_iters; i++) {
-        if (fabs(f - ((double)p_old / (double)q_old)) < eps) {
-            if (DEBUG) {
-                fast_serial_printf("Ratio close to double within eps %d\n", eps);
-            }
-            break;
-        }
-
-        if (r_old != 0) {
-            a_new = floor(1/r_old);
-        } else {
-            fast_serial_printf("Error: Division by zero.\n");
-            break;
-        }
-        p_new = a_new * p_old + p_double_old;
-        q_new = a_new * q_old + q_double_old;
-
-        if (p_new > p_max || q_new > q_max){
-            if (DEBUG) {
-                fast_serial_printf("Either delta or rate out of bounds\n");
-            }
-            break;
-        }
-
-        r_old = 1/r_old - a_new;
-
-        // update all vars
-        p_double_old = p_old;
-        p_old = p_new;
-        q_double_old = q_old;
-        q_old = q_new;
-
-    }
-    *numerator = p_old;
-    *denominator) = q_old;
-    return (double)p_old / (double)q_old;
-}
-
-double approx_double_16(double f, uint16_t * numerator, uint * denominator, uint16_t p_max, uint16_t q_max) {
-    // Approximates a double as a ratio of integers 
-    // using a modified continued fractions algorithm
-
-    double eps = 0.00001; // later
-
-    uint16_t a0 = floor(f);
-    double r_old = f - a0;
-    uint16_t q_double_old = 0;
-    uint16_t p_double_old = 1;
-    uint16_t p_old = a0;
-    uint16_t q_old = 1;
-
-    uint16_t a_new, p_new, q_new;
-    double r_new;
-
-    uint num_iters = 100; 
-    for (uint i = 1; i < num_iters; i++) {
-        if (fabs(f - ((double)p_old / (double)q_old)) < eps) {
-            if (DEBUG) {
-                fast_serial_printf("Ratio close to double within eps %lf in %u iters\n", eps, i);
-            }
-            break;
-        }
-
-        if (r_old != 0) {
-            a_new = floor(1/r_old);
-        } else {
-            fast_serial_printf("Error: Division by zero encountered in approx_double.\n");
-            break;
-        }
-        p_new = a_new * p_old + p_double_old;
-        q_new = a_new * q_old + q_double_old;
-
-        if (p_new > p_max || q_new > q_max){
-            if (DEBUG) {
-                fast_serial_printf("Either delta or rate out of bounds\n");
-            }
-            break;
-        }
-
-        r_old = 1/r_old - a_new;
-
-        // update all vars
-        p_double_old = p_old;
-        p_old = p_new;
-        q_double_old = q_old;
-        q_old = q_new;
-
-    }
-    *numerator = p_old;
-    *denominator = q_old;
-    return (double)p_old / (double)q_old;
-    
-}
-
 // =============================================================================
 // Set Table Instructions
 // =============================================================================
@@ -612,14 +500,15 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     start = get_asf(start, &asf_start);
     end = get_asf(end, &asf_end);
 
+    double t_sync = 4 / (ad9959.ref_clk * ad9959.pll_mult);
+    double bits_per_arb = 1024;
     if (start < end) {
-        bits_per_sync_clk_cycle = sweep_rate * 4 / (ad9959->ref_clk * ad9959->pll_mult) * 1024; 
-        sweep_rate = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-        
-        // reversing scaling to see what sweep rate was actually set
-        sweep_rate = sweep_rate * (ad9959->ref_clk * ad9959->pll_mult) / (4 * 1024);
-
+        double arb_per_sync = sweep_rate * t_sync;
+        double bits_per_sync_clk_cycle = bits_per_arb * arb_per_sync;
+        double approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+        sweep_rate = approx_bits_per_sync / bits_per_arb / t_sync;
     } else {
+        // sweep_rate = sweep_rate / t_sync;
         sweep_rate = get_asf(sweep_rate, &delta);
     }
     if (delta == 0) {
@@ -630,9 +519,8 @@ void parse_amp_sweep_ins(uint addr, uint channel,
 
     if (DEBUG) {
         fast_serial_printf(
-                           "Set ins #%d for channel %d from %3lf%% to %3lf%% with sweep delta %3lf%% "
-                           "and rate of %u\n",
-                           addr, channel, start, end, sweep_rate, rate);
+                           "Set ins #%d for channel %d from %3lf%% to %3lf%% with sweep rate %3lf%% arb/s\n",
+                           addr, channel, start, end, sweep_rate);
     }
 
     set_amp_sweep_ins(addr, channel, asf_start, asf_end, delta, rate, ftw, pow);
@@ -746,20 +634,30 @@ void parse_freq_sweep_ins(uint addr, uint channel,
     end = get_ftw(&ad9959, end, &ftw_end);
 
     if (start < end) {
-        double bits_per_sync_clk_cycle = sweep_rate * 4 / (ad9959->ref_clk * ad9959->pll_mult)^2 * 4294967296; 
-        sweep_rate = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-        sweep_rate = sweep_rate * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 4294967296);
+        double sys_clk = ad9959.ref_clk * ad9959.pll_mult;
+        double t_sync = 4 / sys_clk;
+        double bits_per_hz = 4294967296 / sys_clk;
+        double hz_per_sync = sweep_rate * t_sync;
+        double approx_bits_per_sync;
+        double bits_per_sync_clk_cycle = bits_per_hz * hz_per_sync;
+
+        approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+
+        sweep_rate = approx_bits_per_sync / bits_per_hz / t_sync;
 
     } else {
         // here your delta is just sweep_rate / 1
         sweep_rate = get_ftw(&ad9959, sweep_rate, &delta); 
     }
-
+    if (delta == 0) {
+        // enforce minimum sweep rate to not be zero
+        delta = 1;
+        sweep_rate = delta * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 4294967296);
+    }
     if (DEBUG) {
         fast_serial_printf(
-                           "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with delta %4lf "
-                           "Hz and rate of %d\n",
-                           addr, channel, start, end, sweep_rate, rate);
+                           "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with sweep rate %lf Hz/s\n",
+                           addr, channel, start, end, sweep_rate);
     }
 
     set_freq_sweep_ins(addr, channel, ftw_start, ftw_end, delta, rate, asf, pow);
@@ -879,85 +777,24 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     end = get_pow(end, &pow_end);
 
     if (start < end) {
-        double bits_per_sync_clk_cycle = sweep_rate * 4 / (ad9959.ref_clk * ad9959.pll_mult) * 16384;
-        sweep_rate = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-        sweep_rate = sweep_rate * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 16384);
-
+        double bits_per_deg = 16384;
+        double t_sync = 4 / (ad9959.ref_clk * ad9959.pll_mult);
+        double deg_per_sync = sweep_rate * t_sync;
+        double bits_per_sync_clk_cycle = bits_per_deg * deg_per_sync;
+        double approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+        sweep_rate = approx_bits_per_sync / bits_per_deg / t_sync;
     } else {
         sweep_rate = get_pow(sweep_rate, &delta);
     }
 
     if (DEBUG) {
         fast_serial_printf(
-            "Set ins #%d for channel %d from %4lf deg to %4lf deg with delta "
-            "%4lf deg and rate of %d\n",
-            addr, channel, pow_start / 16384.0 * 360, pow_end / 16384.0 * 360, delta / 16384.0 * 360,
-            rate);
+            "Set ins #%d for channel %d from %4lf deg to %4lf deg with sweep rate %4lf deg/s\n",
+            addr, channel, start, end, sweep_rate);
     }
 
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
 }
-
-// void get_continued_fraction(double number, uint32_t *frac_list, uint num_terms) {
-
-//     // Represent a double as a continued fraction
-//     // Avoids dynamic allocation and lack of array return types by editing a 
-//     // pre-allocated frac_list
-//     uint32_t a = floor(number);
-//     frac_list[0] = a;
-
-//     for (uint i = 0; i < num_terms; i++) {
-//         number = number - frac_list[i];
-
-//         // Check if number is zero within some tolerance
-//         // May need to define somewhere else
-//         if (number < 0.00001){
-//             break;
-//         }
-
-//         number = 1 / number;
-//         frac_list[i+1] = floor(number);
-//     }
-// }
-
-// void continued_fraction_as_ratio(uint32_t *frac_list, uint num_terms, uint32_t *numerator, uint32_t *denominator) {
-
-//     // Algorithm to extract the numerator and denominator that estimate the decimal
-//     // Its other related function may need to be combined
-
-//     if (num_terms == 0) {
-//         // Divide by zero error?
-//         *numerator = 0;
-//         *denominator = 0;
-//     } else if (num_terms == 1) {
-//         // If only one term, the fraction is just that term over 1
-//         *numerator = frac_list[0];
-//         *denominator = 1; // this is fudged
-//     } else {
-//         uint32_t p0 = frac_list[0], q0 = 1;
-//         uint32_t p1 = frac_list[1] * frac_list[0] + 1, q1 = frac_list[1];
-//         uint32_t p, q;
-
-//         for (uint k = 3; k < num_terms + 1; k++) {
-//             p = frac_list[k - 1] * p1 + p0;
-//             q = frac_list[k - 1] * q1 + q0;
-//             p0 = p1;
-//             p1 = p;
-//             q0 = q1;
-//             q1 = q;
-//         }
-
-//         // Assign p to numerator and q to denominator
-//         // Restrict denominator to be less than 256
-//         if (q1 > 256){
-//             *numerator = p0;
-//             *denominator = q0;
-//         } else {
-//             *numerator = p1;
-//             *denominator = q1;
-//         }
-//     }
-// }
 
 void get_memory_layout(uint sweep_mode) {
 
@@ -1138,6 +975,14 @@ void loop() {
     } else if (strncmp(readstring, "abort", 5) == 0) {
         abort_run();
         OK();
+    } else if (strncmp(readstring, "approx", 6) == 0) {
+        double f, f_approx;
+        int parsed = sscanf(readstring, "%*s %lf", &f);
+        uint rate;
+        uint32_t delta;
+
+        f_approx = approx_double_32(f, &delta, &rate, 4e6, 255);
+        fast_serial_printf("%lf (%lf)=[%u/%u]\n", f, f_approx, delta, rate);
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
@@ -1171,21 +1016,6 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "getmode", 7) == 0) {
         get_memory_layout(ad9959.sweep_type);
-    // } else if (strncmp(readstring, "getfrac", 7) == 0) {
-
-    //     uint num_terms = 4;
-    //     uint16_t frac_container[num_terms];
-    //     uint16_t some_numerator, some_denominator;
-    //     get_continued_fraction(2.3184, frac_container, num_terms);
-    //     fast_serial_printf("[");
-
-    //     for (uint i=0; i < num_terms; i++){
-    //         fast_serial_printf("%u,", frac_container[i]);
-    //     }
-    //     fast_serial_printf("]\n");
-
-    //     continued_fraction_as_ratio(frac_container, num_terms, &some_numerator, &some_denominator);
-    //     fast_serial_printf("Got %u and %u\n", some_numerator, some_denominator);
 
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
