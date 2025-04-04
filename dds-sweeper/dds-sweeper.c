@@ -219,7 +219,7 @@ double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint
     double eps = 0.00001; // later
 
     uint32_t a0 = floor(f);
-    uint32_t r_old = f - a0;
+    double r_old = f - a0;
     uint32_t q_double_old = 0;
     uint32_t p_double_old = 1;
     uint32_t p_old = a0;
@@ -240,7 +240,7 @@ double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint
         if (r_old != 0) {
             a_new = floor(1/r_old);
         } else {
-            fast_serial_printf("Error: Division by zero encountered in approx_double.\n");
+            fast_serial_printf("Error: Division by zero.\n");
             break;
         }
         p_new = a_new * p_old + p_double_old;
@@ -263,7 +263,7 @@ double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint
 
     }
     *numerator = p_old;
-    *((uint8_t *)denominator) = q_old;
+    *denominator) = q_old;
     return (double)p_old / (double)q_old;
 }
 
@@ -274,7 +274,7 @@ double approx_double_16(double f, uint16_t * numerator, uint * denominator, uint
     double eps = 0.00001; // later
 
     uint16_t a0 = floor(f);
-    uint16_t r_old = f - a0;
+    double r_old = f - a0;
     uint16_t q_double_old = 0;
     uint16_t p_double_old = 1;
     uint16_t p_old = a0;
@@ -285,7 +285,7 @@ double approx_double_16(double f, uint16_t * numerator, uint * denominator, uint
 
     uint num_iters = 100; 
     for (uint i = 1; i < num_iters; i++) {
-        if (abs(f - ((double)p_old / (double)q_old)) < eps) {
+        if (fabs(f - ((double)p_old / (double)q_old)) < eps) {
             if (DEBUG) {
                 fast_serial_printf("Ratio close to double within eps %lf in %u iters\n", eps, i);
             }
@@ -318,7 +318,6 @@ double approx_double_16(double f, uint16_t * numerator, uint * denominator, uint
 
     }
     *numerator = p_old;
-    // *((uint8_t *)denominator) = q_old;
     *denominator = q_old;
     return (double)p_old / (double)q_old;
     
@@ -614,8 +613,12 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     end = get_asf(end, &asf_end);
 
     if (start < end) {
-        input = sweep_rate * 4 / (ad9959->ref_clk * ad9959->pll_mult) * 1024; 
-        sweep_rate = approx_double_16(sweep_rate, &delta, &rate, delta_max, rate_max);
+        bits_per_sync_clk_cycle = sweep_rate * 4 / (ad9959->ref_clk * ad9959->pll_mult) * 1024; 
+        sweep_rate = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+        
+        // reversing scaling to see what sweep rate was actually set
+        sweep_rate = sweep_rate * (ad9959->ref_clk * ad9959->pll_mult) / (4 * 1024);
+
     } else {
         sweep_rate = get_asf(sweep_rate, &delta);
     }
@@ -744,9 +747,9 @@ void parse_freq_sweep_ins(uint addr, uint channel,
 
     if (start < end) {
         double bits_per_sync_clk_cycle = sweep_rate * 4 / (ad9959->ref_clk * ad9959->pll_mult)^2 * 4294967296; 
-
         sweep_rate = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-        // sweep_rate = get_ftw(&ad9959, sweep_rate, &delta); 
+        sweep_rate = sweep_rate * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 4294967296);
+
     } else {
         // here your delta is just sweep_rate / 1
         sweep_rate = get_ftw(&ad9959, sweep_rate, &delta); 
@@ -876,7 +879,10 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     end = get_pow(end, &pow_end);
 
     if (start < end) {
-        sweep_rate = approx_double_16(sweep_rate, &delta, &rate, delta_max, rate_max);
+        double bits_per_sync_clk_cycle = sweep_rate * 4 / (ad9959.ref_clk * ad9959.pll_mult) * 16384;
+        sweep_rate = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+        sweep_rate = sweep_rate * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 16384);
+
     } else {
         sweep_rate = get_pow(sweep_rate, &delta);
     }
