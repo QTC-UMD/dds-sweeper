@@ -509,7 +509,6 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     if (start < end) {
         approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
     } else {
-        // sweep_rate = get_asf(sweep_rate, &delta);
         approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
 
     }
@@ -649,11 +648,8 @@ void parse_freq_sweep_ins(uint addr, uint channel,
 
     if (start < end) {
         approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-        
     } else {
-        // here your delta is just sweep_rate / 1
         approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
-        // sweep_rate = get_ftw(&ad9959, sweep_rate, &delta); 
     }
     
     // back to human readable units
@@ -664,7 +660,7 @@ void parse_freq_sweep_ins(uint addr, uint channel,
         delta = 1;
         sweep_rate = delta * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 4294967296);
     }
-    
+
     if (DEBUG) {
         fast_serial_printf(
                            "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with sweep rate %lf Hz/s\n",
@@ -796,7 +792,6 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     if (start < end) {
         approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
     } else {
-        // sweep_rate = get_pow(sweep_rate, &delta);
         approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
     }
 
@@ -1002,7 +997,6 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %lf", &f);
         uint rate;
         uint32_t delta;
-
         f_approx = approx_double_32(f, &delta, &rate, 4e6, 255);
         fast_serial_printf("%lf (%lf)=[%u/%u]\n", f, f_approx, delta, rate);
     } else if (strncmp(readstring, "approx16", 8) == 0) {
@@ -1010,7 +1004,6 @@ void loop() {
         int parsed = sscanf(readstring, "%*s %lf", &f);
         uint rate;
         uint16_t delta;
-
         f_approx = approx_double_16(f, &delta, &rate, 16300, 255);
         fast_serial_printf("%lf (%lf)=[%u/%u]\n", f, f_approx, delta, rate);
     }
