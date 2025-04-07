@@ -509,12 +509,14 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     if (start < end) {
         approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
     } else {
-        // sweep_rate = sweep_rate * bits_per_arb / t_sync;
         // sweep_rate = get_asf(sweep_rate, &delta);
         approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
 
     }
+
+    // back to human readable units
     sweep_rate = approx_bits_per_sync / bits_per_arb / t_sync;
+
     if (delta == 0) {
         // enforce minimum sweep rate to not be zero
         delta = 1;
@@ -637,28 +639,32 @@ void parse_freq_sweep_ins(uint addr, uint channel,
     // Convert percentages to integers, check values in range
     start = get_ftw(&ad9959, start, &ftw_start);
     end = get_ftw(&ad9959, end, &ftw_end);
+    
+    double sys_clk = ad9959.ref_clk * ad9959.pll_mult;
+    double t_sync = 4 / sys_clk;
+    double bits_per_hz = 4294967296 / sys_clk;
+    double hz_per_sync = sweep_rate * t_sync;
+    double bits_per_sync_clk_cycle = bits_per_hz * hz_per_sync;
+    double approx_bits_per_sync;
 
     if (start < end) {
-        double sys_clk = ad9959.ref_clk * ad9959.pll_mult;
-        double t_sync = 4 / sys_clk;
-        double bits_per_hz = 4294967296 / sys_clk;
-        double hz_per_sync = sweep_rate * t_sync;
-        double approx_bits_per_sync;
-        double bits_per_sync_clk_cycle = bits_per_hz * hz_per_sync;
-
         approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-
-        sweep_rate = approx_bits_per_sync / bits_per_hz / t_sync;
-
+        
     } else {
         // here your delta is just sweep_rate / 1
-        sweep_rate = get_ftw(&ad9959, sweep_rate, &delta); 
+        approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
+        // sweep_rate = get_ftw(&ad9959, sweep_rate, &delta); 
     }
+    
+    // back to human readable units
+    sweep_rate = approx_bits_per_sync / bits_per_hz / t_sync;
+
     if (delta == 0) {
         // enforce minimum sweep rate to not be zero
         delta = 1;
         sweep_rate = delta * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 4294967296);
     }
+    
     if (DEBUG) {
         fast_serial_printf(
                            "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with sweep rate %lf Hz/s\n",
@@ -781,15 +787,26 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     start = get_pow(start, &pow_start);
     end = get_pow(end, &pow_end);
 
+    double bits_per_deg = 16384;
+    double t_sync = 4 / (ad9959.ref_clk * ad9959.pll_mult);
+    double deg_per_sync = sweep_rate * t_sync;
+    double bits_per_sync_clk_cycle = bits_per_deg * deg_per_sync;
+    double approx_bits_per_sync;
+
     if (start < end) {
-        double bits_per_deg = 16384;
-        double t_sync = 4 / (ad9959.ref_clk * ad9959.pll_mult);
-        double deg_per_sync = sweep_rate * t_sync;
-        double bits_per_sync_clk_cycle = bits_per_deg * deg_per_sync;
-        double approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
-        sweep_rate = approx_bits_per_sync / bits_per_deg / t_sync;
+        approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
     } else {
-        sweep_rate = get_pow(sweep_rate, &delta);
+        // sweep_rate = get_pow(sweep_rate, &delta);
+        approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
+    }
+
+    // back to human readable units
+    sweep_rate = approx_bits_per_sync / bits_per_deg / t_sync;
+
+    if (delta == 0) {
+        // enforce minimum sweep rate to not be zero
+        delta = 1;
+        sweep_rate = delta / 16383.0;
     }
 
     if (DEBUG) {

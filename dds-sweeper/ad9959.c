@@ -197,7 +197,6 @@ double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint
     
     uint num_iters = 100; 
     for (uint i = 1; i < num_iters; i++) {
-
         if (fabs(f - ((double)p_old / (double)q_old)) < eps) {
             // Ratio close to double within eps
             break;
