@@ -1,5 +1,6 @@
 #include "ad9959.h"
 #include "fast_serial.h"
+#include <stdlib.h>
 
 // =============================================================================
 // calculate tuning words

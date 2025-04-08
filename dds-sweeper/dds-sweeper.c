@@ -21,7 +21,6 @@
 */
 
 #include <string.h>
-#include <stdlib.h>
 
 #include "fast_serial.h"
 
@@ -516,13 +515,6 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     // back to human readable units
     sweep_rate = approx_bits_per_sync / bits_per_arb / t_sync;
 
-    if (delta == 0) {
-        // enforce minimum sweep rate to not be zero
-        delta = 1;
-        sweep_rate = delta / 1023.0;
-    }
-    
-
     if (DEBUG) {
         fast_serial_printf(
                            "Set ins #%d for channel %d from %3lf%% to %3lf%% with sweep rate %3lf%% arb/s\n",
@@ -654,12 +646,6 @@ void parse_freq_sweep_ins(uint addr, uint channel,
     
     // back to human readable units
     sweep_rate = approx_bits_per_sync / bits_per_hz / t_sync;
-
-    if (delta == 0) {
-        // enforce minimum sweep rate to not be zero
-        delta = 1;
-        sweep_rate = delta * (ad9959.ref_clk * ad9959.pll_mult) / (4 * 4294967296);
-    }
 
     if (DEBUG) {
         fast_serial_printf(
@@ -797,12 +783,6 @@ void parse_phase_sweep_ins(uint addr, uint channel,
 
     // back to human readable units
     sweep_rate = approx_bits_per_sync / bits_per_deg / t_sync;
-
-    if (delta == 0) {
-        // enforce minimum sweep rate to not be zero
-        delta = 1;
-        sweep_rate = delta / 16383.0;
-    }
 
     if (DEBUG) {
         fast_serial_printf(
@@ -992,20 +972,6 @@ void loop() {
     } else if (strncmp(readstring, "abort", 5) == 0) {
         abort_run();
         OK();
-    } else if (strncmp(readstring, "approx32", 8) == 0) {
-        double f, f_approx;
-        int parsed = sscanf(readstring, "%*s %lf", &f);
-        uint rate;
-        uint32_t delta;
-        f_approx = approx_double_32(f, &delta, &rate, 4e6, 255);
-        fast_serial_printf("%lf (%lf)=[%u/%u]\n", f, f_approx, delta, rate);
-    } else if (strncmp(readstring, "approx16", 8) == 0) {
-        double f, f_approx;
-        int parsed = sscanf(readstring, "%*s %lf", &f);
-        uint rate;
-        uint16_t delta;
-        f_approx = approx_double_16(f, &delta, &rate, 16300, 255);
-        fast_serial_printf("%lf (%lf)=[%u/%u]\n", f, f_approx, delta, rate);
     }
     // ====================================================
     // Stuff that cannot be done while the table is running
