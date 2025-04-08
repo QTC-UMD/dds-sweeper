@@ -24,14 +24,14 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 | Single Stepping | 4 $\mu s$ | 6  $\mu s$ | 8  $\mu s$ | 10 $\mu s$ |
 | Sweep Mode      | 8 $\mu s$ | 12 $\mu s$ | 16 $\mu s$ | 20 $\mu s$ |
 
-- The number of instructions you can store in the table depends on the type of sweep being performed and the number of channels being used. Note that these values were determined empirically and can be reobtained with the testing notebook `instruction-tests.ipynb`.
+- The number of instructions you can store in the table depends on the type of sweep being performed and the number of channels being used. Note that these values were determined empirically and can be reobtained with the testing notebook `instruction-tests.ipynb`. Note that these were obtained with a `MAX_SIZE` of 243 Kb.
 
 | Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------------------|-----------|-----------|-----------|-----------|
-| Single Stepping (Ext Timer) | 16352     | 8473      | 5714      | 4311      |
-| Sweep Mode (Ext Timer)      | 8472      | 4311      | 2890      | 2174      |
-| Single Stepping (Int Timer) | 4998      | 4998      | 4998      | 3960      |
-| Sweep Mode (Int Timer)      | 4998      | 3960      | 2653      | 1995      |
+| Single Stepping (Ext Timer) | 16587     | 8579      | 5786      | 4365      |
+| Sweep Mode (Ext Timer)      | 8579      | 4364      | 2927      | 2201      |
+| Single Stepping (Int Timer) | 5000      | 5000      | 5000      | 4014      |
+| Sweep Mode (Int Timer)      | 5000      | 4014      | 2691      | 2024      |
 
 ## How to flash the firmware
 
