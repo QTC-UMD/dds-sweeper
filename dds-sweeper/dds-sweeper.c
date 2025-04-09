@@ -34,7 +34,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger_timer.pio.h"
-#define VERSION "0.2.1"
+#define VERSION "0.3.0"
 
 // Mutex for status
 static mutex_t status_mutex;
