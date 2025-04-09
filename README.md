@@ -24,14 +24,14 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 | Single Stepping | 4 $\mu s$ | 6  $\mu s$ | 8  $\mu s$ | 10 $\mu s$ |
 | Sweep Mode      | 8 $\mu s$ | 12 $\mu s$ | 16 $\mu s$ | 20 $\mu s$ |
 
-- The number of instructions you can store in the table depends no the type of sweep being performed and the number of channels being used.  
+- The number of instructions you can store in the table depends on the type of sweep being performed and the number of channels being used. The table below was obtained with a total allocated RAM of 243 KB:
 
 | Table Mode                  | 1 Channel | 2 Channel | 3 Channel | 4 Channel |
 |-----------------------------|-----------|-----------|-----------|-----------|
-| Single Stepping (Ext Timer) | 16656     | 8615      | 5810      | 4383      |
-| Sweep Mode (Ext Timer)      | 8327      | 4234      | 2838      | 2135      |
-| Single Stepping (Int Timer) | 5000      | 5000      | 5000      | 4032      |
-| Sweep Mode (Int Timer)      | 5000      | 3895      | 2611      | 1964      |
+| Single Stepping (Ext Timer) | 16587     | 8579      | 5786      | 4365      |
+| Sweep Mode (Ext Timer)      | 8579      | 4364      | 2927      | 2201      |
+| Single Stepping (Int Timer) | 5000      | 5000      | 5000      | 4014      |
+| Sweep Mode (Int Timer)      | 5000      | 4014      | 2691      | 2024      |
 
 ## How to flash the firmware
 

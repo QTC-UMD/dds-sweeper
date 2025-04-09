@@ -70,7 +70,7 @@ int clk_mode = INTERNAL;
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
 
-#define MAX_SIZE 245760
+#define MAX_SIZE 248832 // 243 * 1024
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
@@ -103,6 +103,10 @@ uint stop_ins = 0; // stop/repeat being unset denoted by 0
 // bytes to encode an instruction in terms of sweep type
 // order is single step, amp, freq, phase, amp2, freq2, phase2
 uint BYTES_PER_INS[] = {8, 7, 13, 7, 13, 17, 13};
+
+// instruction sizes after backend processing
+// order is single step, amp, freq, phase, amp2, freq2, phase2
+uint SIZE_EACH_INS[] = {14, 28, 29, 27, 36, 36, 36};
 
 // =============================================================================
 // Utility Functions
@@ -800,7 +804,7 @@ void get_instructions(void) {
         return;
     }
 
-    // Loop through each instruction line to get raw bytes 
+    // Loop through each instruction line to get raw bytes
     for (uint i = 0; i < num_ins; i++) {
         uint offset = i * step;
         fast_serial_printf("Offset: %u | ", offset);
@@ -1117,8 +1121,7 @@ void loop() {
         } else if (type > PHASE2_MODE) {
             fast_serial_printf("Invalid Type - table type must be in range 0-6\n");
         } else {
-            uint8_t sizes[] = {14, 28, 29, 27, 36, 36, 36};
-            INS_SIZE = sizes[type];
+            INS_SIZE = SIZE_EACH_INS[type];
             ad9959.sweep_type = type;
             timing = _timing;
 
@@ -1475,7 +1478,7 @@ void loop() {
                 if(ins_count > 0){
                     fast_serial_read(readstring, ins_count*bytes_per_ins*ad9959.channels);
 
-                    for (int i = 0; i < ins_per_buffer; i++) {
+                    for (int i = 0; i < ins_count; i++) {
                         for(int j = 0; j < ad9959.channels; j++) {
                             uint byte_offset = bytes_per_ins*(i*ad9959.channels + j);
                             if (ad9959.sweep_type == SS_MODE) {
