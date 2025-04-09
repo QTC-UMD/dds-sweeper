@@ -1,5 +1,6 @@
 #include "ad9959.h"
 #include "fast_serial.h"
+#include <stdlib.h>
 
 // =============================================================================
 // calculate tuning words
@@ -166,4 +167,117 @@ void clear() {
                        0x02, 0x00, 0x00};
 
     spi_write_blocking(SPI, clear, sizeof clear);
+}
+
+// =============================================================================
+// Sweep rate algorithms
+// =============================================================================
+
+double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint32_t p_max, uint32_t q_max) {
+    // Approximates a double as a ratio of integers 
+    // using a modified continued fractions algorithm
+
+    double eps = 0.000000001; // later
+
+    uint32_t a0 = floor(f);
+    double r_old = f - a0;
+    uint32_t q_double_old = 0;
+    uint32_t p_double_old = 1;
+    uint32_t p_old = a0;
+    uint32_t q_old = 1;
+
+    uint32_t a_new, p_new, q_new;
+    double r_new;
+
+    if (p_old == 0) {
+        // Returns slowest possible ramp rate
+        *numerator = 1;
+        *denominator = 255;
+        return 1.0/255.0;
+    }
+    
+    uint num_iters = 100; 
+    for (uint i = 1; i < num_iters; i++) {
+        if (fabs(f - ((double)p_old / (double)q_old)) < eps) {
+            // Ratio close to double within eps
+            break;
+        }
+        
+        a_new = floor(1/r_old);
+        p_new = a_new * p_old + p_double_old;
+        q_new = a_new * q_old + q_double_old;
+
+        if (p_new > p_max || q_new > q_max){
+            // Either delta or rate out of bounds
+            break;
+        }
+
+        r_old = 1/r_old - a_new;
+
+        // update all vars
+        p_double_old = p_old;
+        p_old = p_new;
+        q_double_old = q_old;
+        q_old = q_new;
+        
+    }
+
+    *numerator = p_old;
+    *denominator = q_old;
+    return (double)p_old / (double)q_old;
+}
+
+double approx_double_16(double f, uint16_t * numerator, uint * denominator, uint16_t p_max, uint16_t q_max) {
+    // Approximates a double as a ratio of integers 
+    // using a modified continued fractions algorithm
+
+    double eps = 0.000000001; // later
+
+    uint16_t a0 = floor(f);
+    double r_old = f - a0;
+    uint16_t q_double_old = 0;
+    uint16_t p_double_old = 1;
+    uint16_t p_old = a0;
+    uint16_t q_old = 1;
+
+    uint16_t a_new, p_new, q_new;
+    double r_new;
+
+    if (p_old == 0) {
+        // Returns slowest possible ramp rate
+        *numerator = 1;
+        *denominator = 255;
+        return 1.0/255.0;
+    }
+    
+    uint num_iters = 100; 
+    for (uint i = 1; i < num_iters; i++) {
+        if (fabs(f - ((double)p_old / (double)q_old)) < eps) {
+            // Ratio close to double within eps
+            break;
+        }
+        
+        a_new = floor(1/r_old);
+        p_new = a_new * p_old + p_double_old;
+        q_new = a_new * q_old + q_double_old;
+        
+        if (p_new > p_max || q_new > q_max){
+            // Either delta or rate out of bounds
+            break;
+        }
+        
+        r_old = 1/r_old - a_new;
+        
+        // update all vars
+        p_double_old = p_old;
+        p_old = p_new;
+        q_double_old = q_old;
+        q_old = q_new;
+
+    }
+
+    *numerator = p_old;
+    *denominator = q_old;
+    return (double)p_old / (double)q_old;
+    
 }

@@ -113,4 +113,8 @@ void set_ref_clk(ad9959_config* c, uint64_t freq);
 void single_step_mode();
 void clear();
 
+// Sweep rate algorithm
+double approx_double_32(double f, uint32_t * numerator, uint * denominator, uint32_t p_max, uint32_t q_max);
+double approx_double_16(double f, uint16_t * numerator, uint * denominator, uint16_t p_max, uint16_t q_max);
+
 #endif

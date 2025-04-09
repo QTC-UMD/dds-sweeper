@@ -34,7 +34,6 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger_timer.pio.h"
-
 #define VERSION "0.2.1"
 
 // Mutex for status
@@ -69,6 +68,7 @@ int clk_mode = INTERNAL;
 
 // PIO VALUES IT IS LOOKING FOR
 #define UPDATE 0
+
 
 #define MAX_SIZE 248832 // 243 * 1024
 #define TIMERS 5000
@@ -487,6 +487,9 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     uint32_t ftw;
     uint rate = 1;
 
+    uint32_t delta_max = 1023;
+    uint32_t rate_max = 255;
+
     if (ad9959.sweep_type == AMP2_MODE) {
         // Convert others into integer values
         get_ftw(&ad9959, freq, &ftw);
@@ -497,28 +500,26 @@ void parse_amp_sweep_ins(uint addr, uint channel,
     start = get_asf(start, &asf_start);
     end = get_asf(end, &asf_end);
 
-    delta = round(sweep_rate * 1024);
+    double t_sync = 4 / (ad9959.ref_clk * ad9959.pll_mult);
+    double bits_per_arb = 1024;
+    double arb_per_sync = sweep_rate * t_sync;
+    double bits_per_sync_clk_cycle = bits_per_arb * arb_per_sync;
+    double approx_bits_per_sync;
 
-    if (delta < 1) {
-        if (asf_end > asf_start) {
-            // If rising, we can use rate to divide down
-            rate = 255;
-            delta = round(sweep_rate * 1024 / 255);
-            if (delta < 1) {
-                delta = 1;
-            }
-        } else {
-            delta = 1;
-        }
-    } else if (delta > 1023) {
-        delta = 1023;
+    if (start < end) {
+        approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+    } else {
+        approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
+
     }
+
+    // back to human readable units
+    sweep_rate = approx_bits_per_sync / bits_per_arb / t_sync;
 
     if (DEBUG) {
         fast_serial_printf(
-                           "Set ins #%d for channel %d from %3lf%% to %3lf%% with delta %3lf%% "
-                           "and rate of %d\n",
-                           addr, channel, start / 10.23, end / 10.23, delta / 10.23, rate);
+                           "Set ins #%d for channel %d from %3lf%% to %3lf%% with sweep rate %3lf%% arb/s\n",
+                           addr, channel, start, end, sweep_rate);
     }
 
     set_amp_sweep_ins(addr, channel, asf_start, asf_end, delta, rate, ftw, pow);
@@ -619,6 +620,8 @@ void parse_freq_sweep_ins(uint addr, uint channel,
     uint32_t ftw_start, ftw_end, delta;
     uint rate = 1;
 
+    uint32_t delta_max = 4294967296 - 1;
+    uint32_t rate_max = 255;
     if (ad9959.sweep_type == FREQ2_MODE) {
         // Convert others into integer values
         get_asf(amp, &asf);
@@ -628,13 +631,27 @@ void parse_freq_sweep_ins(uint addr, uint channel,
     // Convert percentages to integers, check values in range
     start = get_ftw(&ad9959, start, &ftw_start);
     end = get_ftw(&ad9959, end, &ftw_end);
-    sweep_rate = get_ftw(&ad9959, sweep_rate, &delta);
+    
+    double sys_clk = ad9959.ref_clk * ad9959.pll_mult;
+    double t_sync = 4 / sys_clk;
+    double bits_per_hz = 4294967296 / sys_clk;
+    double hz_per_sync = sweep_rate * t_sync;
+    double bits_per_sync_clk_cycle = bits_per_hz * hz_per_sync;
+    double approx_bits_per_sync;
+
+    if (start < end) {
+        approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+    } else {
+        approx_bits_per_sync = approx_double_32(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
+    }
+    
+    // back to human readable units
+    sweep_rate = approx_bits_per_sync / bits_per_hz / t_sync;
 
     if (DEBUG) {
         fast_serial_printf(
-                           "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with delta %4lf "
-                           "Hz and rate of %d\n",
-                           addr, channel, start, end, sweep_rate, rate);
+                           "Set ins #%d for channel %d from %4lf Hz to %4lf Hz with sweep rate %lf Hz/s\n",
+                           addr, channel, start, end, sweep_rate);
     }
 
     set_freq_sweep_ins(addr, channel, ftw_start, ftw_end, delta, rate, asf, pow);
@@ -740,6 +757,9 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     uint32_t ftw;
     uint rate = 1;
 
+    uint16_t delta_max = 16384 - 1;
+    uint16_t rate_max = 255;
+
     if (ad9959.sweep_type == PHASE2_MODE) {
         // Convert others into integer values
         get_ftw(&ad9959, freq, &ftw);
@@ -749,14 +769,26 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     // Convert from degrees to tuning words
     start = get_pow(start, &pow_start);
     end = get_pow(end, &pow_end);
-    sweep_rate = get_pow(sweep_rate, &delta);
+
+    double bits_per_deg = 16384;
+    double t_sync = 4 / (ad9959.ref_clk * ad9959.pll_mult);
+    double deg_per_sync = sweep_rate * t_sync;
+    double bits_per_sync_clk_cycle = bits_per_deg * deg_per_sync;
+    double approx_bits_per_sync;
+
+    if (start < end) {
+        approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, rate_max);
+    } else {
+        approx_bits_per_sync = approx_double_16(bits_per_sync_clk_cycle, &delta, &rate, delta_max, 1);
+    }
+
+    // back to human readable units
+    sweep_rate = approx_bits_per_sync / bits_per_deg / t_sync;
 
     if (DEBUG) {
         fast_serial_printf(
-            "Set ins #%d for channel %d from %4lf deg to %4lf deg with delta "
-            "%4lf deg and rate of %d\n",
-            addr, channel, pow_start / 16384.0 * 360, pow_end / 16384.0 * 360, delta / 16384.0 * 360,
-            rate);
+            "Set ins #%d for channel %d from %4lf deg to %4lf deg with sweep rate %4lf deg/s\n",
+            addr, channel, start, end, sweep_rate);
     }
 
     set_phase_sweep_ins(addr, channel, pow_start, pow_end, delta, rate, ftw, asf);
@@ -974,6 +1006,7 @@ void loop() {
         OK();
     } else if (strncmp(readstring, "getmode", 7) == 0) {
         get_memory_layout(ad9959.sweep_type);
+
     } else if (strncmp(readstring, "setchannels", 11) == 0) {
         uint channels;
 
