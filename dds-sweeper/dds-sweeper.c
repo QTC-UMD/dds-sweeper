@@ -756,7 +756,7 @@ void parse_phase_sweep_ins(uint addr, uint channel,
     uint32_t ftw;
     uint rate = 1;
 
-    uint16_t delta_max = 16384;
+    uint16_t delta_max = 16384 - 1;
     uint16_t rate_max = 255;
 
     if (ad9959.sweep_type == PHASE2_MODE) {
