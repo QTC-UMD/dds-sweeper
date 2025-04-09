@@ -168,17 +168,17 @@ Manually set the amplitude scale factor of a specified channel. Channels are 0-3
 - `set`:  
 Sets the value of instruction number `addr` for channel `channel` (zero indexed). `addr` starts at 0. It looks different depending on what mode the sweeper is in. If `Debug` is set to `on` it will respond with the actual values set for that instruction.
   - Single Stepping (mode 0): `set <channel:int> <addr:int> <frequency:float> <amplitude:float> <phase:float> (<time:float>)`
-  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> (<time:float>)`
+  - Sweep Mode (modes 1-3): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <sweep_rate:float> (<time:float>)`
 
-    `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `delta` is the amount that the output should change by every cycle of the sweep clock. In the AD9959, the sweep clock runs at one quarter the system clock. The types of values expected for `start_point`, `end_point`, and `delta` different depending on the type of sweep  
+    `start_point` is the value the sweep should start from, and `end_point` is where it will stop. `sweep_rate` is the amount that the output should change in each quantity's units per second (further info below). In the AD9959, the sweep clock runs at one quarter the system clock. The types of values expected for `start_point`, `end_point`, and `sweep_rate` are different depending on the type of sweep:  
     - Amplitude Sweeps (mode 1)  
-      `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proportion of the maximum output amplitude. `delta` is the desired change in that proportion. For all three of those values there is a resolution of $\frac{1}{1024} \approx 0.09766\$
+      `start_point` and `end_point` should be decimals between 0 and 1 that represent the desired proportion of the maximum output amplitude. `sweep_rate` is then that proportion per second. The resolution of the start and end values is $\frac{1}{1024} \approx 0.09766$.
     - Frequency Sweeps (mode 2)  
-      `start_point`, `end_point`, and `delta` are frequencies in Hz. They can have decimal values, but they will be rounded to the nearest multiple of the frequency resolution.
+      `start_point` and `end_point` are frequencies in Hz, with `sweep_rate` in Hz per second. The start and end points can have decimal values, but they will be rounded to the nearest multiple of the frequency resolution ($\frac{f_{sysclk}}{2^{32}}$).
     - Phase Sweeps (mode 3)
-      `start_point`, `end_point`, and `delta` are in degrees. They can have decimal values, but they will be rounded to the nearest multiple of the phase resolution (always $= 360^\circ / 2^{14} \approx 0.02197^\circ$).
+      `start_point`, `end_point` are in degrees, with `sweep_rate` in degrees per second. The start and end points can have decimal values, but they will be rounded to the nearest multiple of the phase resolution ($\frac{360^\circ}{2^{14}} \approx 0.02197^\circ$).
 
-  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <delta:float> <secondary1:double> <secondary2:double> (<time:float>)`
+  - Sweep and Single Stepping Mode (modes 4-6): `set <channel:int> <addr:int> <start_point:float> <end_point:float> <sweep_rate:float> <secondary1:double> <secondary2:double> (<time:float>)`
 
   These modes perform a linear sweep on one of the parameters, while simultaneously single stepping on the other two parameters.
   - Amplitude Sweeps (mode 4)  
