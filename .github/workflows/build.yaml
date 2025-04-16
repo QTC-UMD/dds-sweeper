@@ -22,6 +22,19 @@ jobs:
       - name: Run docker container
         run: docker compose up
 
+      - name: Check for build success
+        shell: bash
+        run: |
+          if [[ ! -f "build_rp2040/dds-sweeper/dds-sweeper_rp2040.uf2"]]; then
+            echo "RP2040 firmware failed to build"
+            exit 1
+          fi
+
+          if [[ ! -f "build_rp2350/dds-sweeper/dds-sweeper_rp2350.uf2"]]; then
+            echo "RP2350 firmware failed to build"
+            exit 1
+          fi
+
       - name: Upload firmwares as artifact
         uses: actions/upload-artifact@v4
         with:
