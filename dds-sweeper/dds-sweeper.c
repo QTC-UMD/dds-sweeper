@@ -34,7 +34,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "trigger_timer.pio.h"
-#define VERSION "0.3.0"
+#define VERSION "0.4.0"
 
 // Mutex for status
 static mutex_t status_mutex;
@@ -70,7 +70,7 @@ int clk_mode = INTERNAL;
 #define UPDATE 0
 
 
-#define MAX_SIZE 248832 // 243 * 1024
+#define MAX_SIZE SWEEPER_MAX_SIZE // defined in CMakeLists.txt
 #define TIMERS 5000
 #define TIMING_OFFSET (MAX_SIZE - TIMERS * 4)
 
@@ -154,7 +154,9 @@ void measure_freqs(void) {
     uint f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
     uint f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
     uint f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+#ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
     uint f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+#endif
 
     fast_serial_printf("pll_sys = %dkHz\n", f_pll_sys);
     fast_serial_printf("pll_usb = %dkHz\n", f_pll_usb);
@@ -163,7 +165,9 @@ void measure_freqs(void) {
     fast_serial_printf("clk_peri = %dkHz\n", f_clk_peri);
     fast_serial_printf("clk_usb = %dkHz\n", f_clk_usb);
     fast_serial_printf("clk_adc = %dkHz\n", f_clk_adc);
+#ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
     fast_serial_printf("clk_rtc = %dkHz\n", f_clk_rtc);
+#endif
 }
 
 void update() { pio_sm_put(PIO_TRIG, 0, UPDATE); }
@@ -950,6 +954,8 @@ void loop() {
 
     if (strncmp(readstring, "version", 7) == 0) {
         fast_serial_printf("%s\n", VERSION);
+    } else if (strncmp(readstring, "board", 5) == 0) {
+        fast_serial_printf("board: pico%d\n", SWEEPER_PICO_BOARD);
     } else if (strncmp(readstring, "status", 6) == 0) {
         fast_serial_printf("%d\n", local_status);
     } else if (strncmp(readstring, "clkstatus", 9) == 0) {
@@ -1107,7 +1113,7 @@ void loop() {
         }
     } else if (strncmp(readstring, "setclock", 8) == 0) {
         uint mode;   // 0 = internal, 1 = external
-        uint freq;  // in Hz (up to 133 MHz)
+        uint freq;  // in Hz (up to 133 MHz or 150 MHz, depending on board)
         uint mult;  // PLL multiplier to use, 1 or 4-20
         int parsed = sscanf(readstring, "%*s %u %u %u", &mode, &freq, &mult);
         if (parsed < 2) {

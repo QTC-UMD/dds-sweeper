@@ -1,8 +1,5 @@
 # ignore the build directory
-build/*
-!build/ddssweeper/
-build/ddssweeper/*
-!build/ddssweeper/dds-sweeper.uf2
+build*/*
 
 .vscode/
 .venv

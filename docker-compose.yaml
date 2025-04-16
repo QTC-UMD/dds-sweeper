@@ -1,11 +1,30 @@
 name: dds-sweeper
 
 services:
-  buildfirmware:
+  sweeper_base:
     build:
       dockerfile: docker/Dockerfile
-    command: /bin/bash -c 'cmake .. && make'
+    image: dds-sweeper/build-firmware
     volumes:
       - .:/dds-sweeper
-    working_dir: /dds-sweeper/build
+    command: /bin/bash -c 'cp /pico/pico-sdk/external/pico_sdk_import.cmake /dds-sweeper/'
+    container_name: sweeper_base
+
+  build_rp2040_sweeper:
+    image: dds-sweeper/build-firmware
+    command: /bin/bash -c 'cmake .. -D PICO_PLATFORM=rp2040 && make'
+    volumes:
+      - .:/dds-sweeper
+    working_dir: /dds-sweeper/build_rp2040
     init: true
+    depends_on:
+      - sweeper_base
+  build_rp2350_sweeper:
+    image: dds-sweeper/build-firmware
+    command: /bin/bash -c 'cmake .. -D PICO_PLATFORM=rp2350 && make'
+    volumes:
+      - .:/dds-sweeper
+    working_dir: /dds-sweeper/build_rp2350
+    init: true
+    depends_on:
+      - sweeper_base
