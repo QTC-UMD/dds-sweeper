@@ -20,12 +20,13 @@ jobs:
         run: docker compose build --pull --build-arg APT_MIRROR="http://azure.archive.ubuntu.com/ubuntu/"
 
       - name: Run docker container
-        run: docker compose up --exit-code-from build_rp2040_sweeper
+        run: docker compose up
 
-      - name: Upload firmware as artifact
+      - name: Upload firmwares as artifact
         uses: actions/upload-artifact@v4
         with:
           name: dds-sweeper-firmware-${{ github.sha }}
+          if-no-files-found: error
           path: |
             build_*/dds-sweeper/*.uf2
             LICENSE
