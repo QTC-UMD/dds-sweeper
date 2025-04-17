@@ -25,7 +25,7 @@ jobs:
       - name: Check for build success of all services
         # https://stackoverflow.com/questions/29568352/using-docker-compose-with-ci-how-to-deal-with-exit-codes-and-daemonized-linked
         run: >
-          docker-compose ps -aq |
+          docker compose ps -aq |
           xargs docker inspect -f '{{ .State.ExitCode }}' |
           grep -v '^0' |
           wc -l |
