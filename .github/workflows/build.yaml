@@ -20,14 +20,25 @@ jobs:
         run: docker compose build --pull --build-arg APT_MIRROR="http://azure.archive.ubuntu.com/ubuntu/"
 
       - name: Run docker container
-        run: docker compose up --exit-code-from buildfirmware
+        run: docker compose up
 
-      - name: Upload firmware as artifact
+      - name: Check for build success of all services
+        # https://stackoverflow.com/questions/29568352/using-docker-compose-with-ci-how-to-deal-with-exit-codes-and-daemonized-linked
+        run: >
+          docker compose ps -aq |
+          xargs docker inspect -f '{{ .State.ExitCode }}' |
+          grep -v '^0' |
+          wc -l |
+          tr -d ' '
+          || exit 1
+
+      - name: Upload firmwares as artifact
         uses: actions/upload-artifact@v4
         with:
           name: dds-sweeper-firmware-${{ github.sha }}
+          if-no-files-found: error
           path: |
-            build/dds-sweeper/*.uf2
+            build_*/dds-sweeper/*.uf2
             LICENSE
 
   github-release:
@@ -50,4 +61,5 @@ jobs:
           generate_release_notes: true
           files: |
             LICENSE
-            dds-sweeper.uf2
+            build_rp2040/dds-sweeper/dds-sweeper_rp2040.uf2
+            build_rp2350/dds-sweeper/dds-sweeper_rp2350.uf2
