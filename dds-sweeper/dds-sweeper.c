@@ -955,7 +955,7 @@ void loop() {
     if (strncmp(readstring, "version", 7) == 0) {
         fast_serial_printf("%s\n", VERSION);
     } else if (strncmp(readstring, "board", 5) == 0) {
-        fast_serial_printf("board: pico%d\n", SWEEPER_PICO_BOARD);
+        fast_serial_printf("pico%d\n", SWEEPER_PICO_BOARD);
     } else if (strncmp(readstring, "status", 6) == 0) {
         fast_serial_printf("%d\n", local_status);
     } else if (strncmp(readstring, "clkstatus", 9) == 0) {

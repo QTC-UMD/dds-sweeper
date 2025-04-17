@@ -119,6 +119,9 @@ Mode can be `0` for internal clocking or `1` for external clocking of the AD9959
 The frequency is the AD9959 reference frequency, in Hz.
 `mult` is the AD9959 PLL multiplier. The corresponding system frequency is `freq*-*mult`.
 
+- `board`:
+Responds with which type of board the firmware is running on: `pico1` or `pico2`.
+
 - `getfreqs`:  
 Responds with a multi-line string containing the current operating frequencies of various clocks (you will be most interested in `pll_sys` and `clk_sys`). Multiline string ends with `ok\n`.
 
