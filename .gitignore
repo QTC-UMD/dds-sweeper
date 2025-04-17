@@ -1,5 +1,6 @@
 # ignore the build directory
 build*/*
+pico_sdk_import.cmake
 
 .vscode/
 .venv
