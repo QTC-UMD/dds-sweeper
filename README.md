@@ -41,8 +41,8 @@ E. Huegler, J. C. Hill, and D. H. Meyer, An agile radio-frequency source using i
 |-----------------------------|-----------|-----------|-----------|-----------|
 | Single Stepping (Ext Timer) | 34132     | 17654     | 11905     | 8981      |
 | Sweep Mode (Ext Timer)      | 17654     | 8981      | 6022      | 4529      |
-| Single Stepping (Int Timer) | 5000      | 5000      | 5000      | 4014      |
-| Sweep Mode (Int Timer)      | 5000      | 4014      | 2691      | 2024      |
+| Single Stepping (Int Timer) | 5000      | 5000      | 5000      | 5000      |
+| Sweep Mode (Int Timer)      | 5000      | 5000      | 5000      | 4353      |
 
 ## How to flash the firmware
 
